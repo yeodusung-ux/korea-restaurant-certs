@@ -438,20 +438,48 @@ if not MFDS:
 C004 = "http://openapi.foodsafetykorea.go.kr/api/%s/C004/json/%%d/%%d" % MFDS
 TODAY = time.strftime("%Y%m%d")
 
-_p = json.loads(fetch(C004 % (1, 1)).decode("utf-8"))["C004"]
-if (_p.get("RESULT") or {}).get("CODE") not in (None, "INFO-000"):
-    raise RuntimeError("식품안심업소 인증 실패: %s" % (_p.get("RESULT") or {}).get("MSG"))
-hg_total = int(_p["total_count"])
-hg_rows, _i = [], 1
-while _i <= hg_total:
-    _j = min(_i + 999, hg_total)
-    _got = (json.loads(fetch(C004 % (_i, _j)).decode("utf-8"))["C004"].get("row")) or []
-    if not _got:
-        break
-    hg_rows.extend(_got)
-    _i = _j + 1
-    time.sleep(0.1)
+# ★한도 초과(INFO-300)는 인증 실패와 다르다 — 재시도해도 그날은 안 풀린다.
+#   가드가 어차피 잡지만, 여기서 사유를 분명히 남겨야 로그만 보고 원인을 안다.
+MFDS_CACHE = os.path.join(HERE, "mfds_cache.json")
 
+
+def _mfds_fetch_all():
+    """전량 수집. 한도 초과(INFO-300)면 예외를 던진다."""
+    p0 = json.loads(fetch(C004 % (1, 1)).decode("utf-8"))["C004"]
+    c0 = (p0.get("RESULT") or {}).get("CODE")
+    if c0 not in (None, "INFO-000"):
+        raise RuntimeError("[%s] %s" % (c0, (p0.get("RESULT") or {}).get("MSG")))
+    tot, out, i = int(p0["total_count"]), [], 1
+    while i <= tot:
+        j = min(i + 999, tot)
+        blk = json.loads(fetch(C004 % (i, j)).decode("utf-8"))["C004"]
+        c = (blk.get("RESULT") or {}).get("CODE")
+        if c not in (None, "INFO-000"):
+            raise RuntimeError("%d~%d [%s] %s" % (i, j, c, (blk.get("RESULT") or {}).get("MSG")))
+        got = blk.get("row") or []
+        if not got:
+            break
+        out.extend(got)
+        i = j + 1
+        time.sleep(0.1)
+    return out
+
+
+# ★식품안전나라는 하루 호출 한도가 있다(INFO-300). 한도에 걸렸다고 그 주 배포를 통째로
+#   날리지 않도록 마지막 성공분을 캐시해 두고 쓴다. 단 **낡은 걸 쓴다는 사실을 크게 남긴다**
+#   — 조용히 옛 데이터로 배포되는 게 가장 나쁘다. 최소건수 가드는 그대로 적용된다.
+try:
+    hg_rows = _mfds_fetch_all()
+    with io.open(MFDS_CACHE, "w", encoding="utf-8") as f:
+        f.write(json.dumps(hg_rows, ensure_ascii=False, separators=(",", ":")))
+except Exception as _e:                              # noqa: BLE001
+    if not os.path.exists(MFDS_CACHE):
+        raise RuntimeError("식품안심업소 수집 실패, 캐시도 없다 — %s" % _e)
+    hg_rows = json.load(io.open(MFDS_CACHE, encoding="utf-8"))
+    print("   ⚠️ 수집 실패(%s) → 캐시 %s건으로 대체(낡았을 수 있음)"
+          % (_e, format(len(hg_rows), ",")))
+
+_p = json.loads('{"C004":{"total_count":"0"}}')["C004"]
 hg_live = [r for r in hg_rows
            if g(r, "INDUTY_NM") == "일반음식점"
            and not g(r, "ASGN_CANCEL_YMD") and not g(r, "CLSBIZ_DT")
