@@ -70,6 +70,16 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .badge{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11.5px;
        font-weight:700;white-space:nowrap;color:#fff;margin:1px 2px 1px 0}
 .badge.dim{opacity:.34}
+.fav{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;padding:0 6px 0 0;
+     color:var(--line);font-family:inherit}
+.fav:hover{color:#f0a020}
+.fav.on{color:#f0a020}
+.memo{margin-top:3px;font-size:12px;color:var(--muted);font-weight:400;white-space:normal;
+      border-left:2px solid var(--accent);padding-left:7px}
+.memo-edit{border:0;background:none;cursor:pointer;color:var(--muted);font-size:11.5px;
+           padding:0 4px;font-family:inherit}
+.memo-edit:hover{color:var(--accent)}
+button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .segb{padding:7px 14px;border:0;background:var(--panel);color:var(--muted);cursor:pointer;
       font-size:12.5px;font-weight:700;font-family:inherit}
@@ -184,7 +194,11 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
           <option value="new">정렬: 지정일 최신순</option>
         </select>
       </div>
+      <button class="act" id="bFav">☆ 내 목록 <span id="favN">0</span></button>
       <button class="act" id="bCsv">⬇ 결과 CSV</button>
+      <button class="act" id="bFavOut" title="내 목록을 파일로 저장(다른 기기로 옮길 때)">⬆ 내보내기</button>
+      <button class="act" id="bFavIn" title="저장해 둔 내 목록 불러오기">⬇ 불러오기</button>
+      <input type="file" id="favFile" accept=".json" class="hide">
       <button class="act" id="bReset">↺ 초기화</button>
     </div>
   </div>
@@ -254,6 +268,27 @@ const rowMask = r => r[N_GID]>=0 ? GMASK[r[N_GID]] : (1<<r[N_DS]);
 // 교집합 모드에서 한 가게를 한 줄로 접을 때 쓰는 키(묶이지 않은 행은 행 자신이 곧 가게)
 const storeKey = r => r[N_GID]>=0 ? r[N_GID] : r;
 const selMask = () => [...dsOn].reduce((m,d)=> m|(1<<DS.indexOf(d)), 0);
+
+/* ── 내 목록(즐겨찾기) ────────────────────────────────────────────────
+   이 브라우저에만 저장된다. 사이트에 올라가지 않고 남에게 보이지 않는다.
+   ★키는 내용에서 만든다 — 행 번호나 그룹 id 로 잡으면 매주 재빌드 때마다
+     번호가 밀려 즐겨찾기가 엉뚱한 가게를 가리킨다. */
+const FAV_LS = 'restcert.favs.v1';
+const RD_K = /([가-힣A-Za-z0-9]+(?:대?로|길))\s*(\d+(?:-\d+)?)/;
+function favKey(r){
+  const m = RD_K.exec(r[N_ADDR]) || [];
+  return [r[N_NAME].replace(/\s/g,''), SIDO[r[N_SIDO]], SGG[r[N_SGG]], m[1]||'', m[2]||''].join('|');
+}
+let favs = {};
+try { favs = JSON.parse(localStorage.getItem(FAV_LS) || '{}') || {}; } catch(e) { favs = {}; }
+let favOnly = false;
+const saveFavs = () => { try { localStorage.setItem(FAV_LS, JSON.stringify(favs)); } catch(e) {} };
+function syncFavUi(){
+  const n = Object.keys(favs).length;
+  $('#favN').textContent = n;
+  $('#bFav').firstChild.textContent = (favOnly ? '★' : '☆') + ' 내 목록 ';
+  $('#bFav').classList.toggle('on', favOnly);
+}
 // 6만 행이 넘어가면 매 키 입력마다 문자열을 다시 만드는 비용이 눈에 띈다 → 1회만 만들어 둔다.
 const SEARCH = R.map(r => (r[N_NAME]+' '+r[N_DET]+' '+r[N_ADDR]+' '+SRC[r[N_SRC]]).toLowerCase());
 
@@ -349,7 +384,9 @@ function apply(reset){
         sc=$('#fSrc').value, q=$('#fQ').value.trim().toLowerCase();
   cur=[];
   for(const i of POOL){ const r=R[i];
-    if((!sd||SIDO[r[N_SIDO]]===sd) && (!sg||SGG[r[N_SGG]]===sg) &&
+    // favOnly 가 꺼져 있으면 단락 평가로 favKey 계산 자체를 건너뛴다(6.8만 행 정규식 비용)
+    if((!favOnly || favs[favKey(r)]) &&
+       (!sd||SIDO[r[N_SIDO]]===sd) && (!sg||SGG[r[N_SGG]]===sg) &&
        (!ct||CAT[r[N_CAT]]===ct) && (!sc||SRC[r[N_SRC]]===sc) &&
        (!q ||SEARCH[i].includes(q))) cur.push(r);
   }
@@ -379,8 +416,11 @@ function render(){
       : '').join('');
     const tel=r[N_TEL]?`<a href="tel:${esc(r[N_TEL].replace(/[^0-9+]/g,''))}">${esc(r[N_TEL])}</a>`
                       :'<span style="color:var(--muted)">-</span>';
+    const fk = favKey(r), fv = favs[fk];
     return `<tr>
-      <td class="name">${esc(r[N_NAME])}</td>
+      <td class="name"><button class="fav${fv?' on':''}" data-k="${esc(fk)}" title="내 목록에 담기">${fv?'★':'☆'}</button>${esc(r[N_NAME])}${
+        fv ? `<button class="memo-edit" data-k="${esc(fk)}">${fv.m?'✎ 메모':'✎ 메모 달기'}</button>` : ''}${
+        fv && fv.m ? `<div class="memo">${esc(fv.m)}</div>` : ''}</td>
       <td class="cert">${badges}</td>
       <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}</td>
       <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
@@ -422,10 +462,11 @@ function buildPivot(){
 }
 
 function toCsv(){
-  const head=['인증','업소명','시도','시군구','대분류','원본분류','상세','주소','전화번호','지정일'];
+  const head=['내목록','메모','인증','업소명','시도','시군구','대분류','원본분류','상세','주소','전화번호','지정일'];
   const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   const certs=r=>DS.filter((d,k)=>(rowMask(r)>>k&1)).join(' · ');
-  const body=cur.map(r=>[certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],CAT[r[N_CAT]],
+  const fv=r=>favs[favKey(r)];
+  const body=cur.map(r=>[fv(r)?'★':'', (fv(r)&&fv(r).m)||'', certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],CAT[r[N_CAT]],
                          SRC[r[N_SRC]],r[N_DET],r[N_ADDR],r[N_TEL],r[N_DATE]].map(q).join(','));
   const b=new Blob(['﻿'+[head.map(q).join(','),...body].join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b);
@@ -454,6 +495,77 @@ $('#fFood').addEventListener('change',()=>{ reflow(); });
 let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>apply(),180);});
 $('#fSort').addEventListener('change',e=>{sortKey=e.target.value;sortDir=1;apply();});
 $('#bCsv').addEventListener('click',toCsv);
+
+/* 내 목록 */
+$('#bFav').addEventListener('click',()=>{ favOnly=!favOnly; syncFavUi(); apply(); });
+/* ★한 행만 제자리로 고쳐 그린다.
+   별을 누를 때마다 apply() 로 100행을 다시 그리면 화면이 깜빡이고 스크롤이 튄다.
+   '내 목록만' 보기일 때는 그 행이 목록에서 빠져야 하므로 그때만 다시 그린다. */
+function paintFav(cell, k){
+  const fv = favs[k];
+  const star = cell.querySelector('.fav');
+  star.classList.toggle('on', !!fv);
+  star.textContent = fv ? '★' : '☆';
+  let pen = cell.querySelector('.memo-edit');
+  if(fv && !pen){
+    pen = document.createElement('button');
+    pen.className = 'memo-edit'; pen.dataset.k = k;
+    star.parentNode.appendChild(pen);
+  } else if(!fv && pen){ pen.remove(); pen = null; }
+  if(pen) pen.textContent = fv.m ? '✎ 메모' : '✎ 메모 달기';
+  let memo = cell.querySelector('.memo');
+  if(fv && fv.m){
+    if(!memo){ memo = document.createElement('div'); memo.className='memo'; cell.appendChild(memo); }
+    memo.textContent = fv.m;
+  } else if(memo){ memo.remove(); }
+}
+
+$('#tb').addEventListener('click',e=>{
+  const star=e.target.closest('.fav');
+  if(star){
+    const k=star.dataset.k;
+    if(favs[k]) delete favs[k]; else favs[k]={t:Date.now(),m:''};
+    saveFavs(); syncFavUi();
+    if(favOnly) apply(false); else paintFav(star.closest('td'), k);
+    return;
+  }
+  const pen=e.target.closest('.memo-edit');
+  if(pen){
+    const k=pen.dataset.k;
+    const v=prompt('메모 (비우면 삭제)', (favs[k]&&favs[k].m)||'');
+    if(v===null) return;
+    favs[k]={t:(favs[k]&&favs[k].t)||Date.now(), m:v.trim()};
+    saveFavs(); paintFav(pen.closest('td'), k);
+  }
+});
+$('#bFavOut').addEventListener('click',()=>{
+  const n=Object.keys(favs).length;
+  if(!n){ alert('내 목록이 비어 있습니다. ☆를 눌러 담아 보세요.'); return; }
+  const b=new Blob([JSON.stringify({v:1,exported:new Date().toISOString(),favs},null,1)],
+                   {type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=`내목록_${n}곳.json`; a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('#bFavIn').addEventListener('click',()=>$('#favFile').click());
+$('#favFile').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const j=JSON.parse(rd.result);
+      const inc=j.favs||j;
+      if(typeof inc!=='object') throw 0;
+      const before=Object.keys(favs).length;
+      // 덮어쓰기가 아니라 합친다 — 기기별로 담아둔 걸 잃지 않게
+      for(const k in inc) if(!favs[k]) favs[k]=inc[k];
+      saveFavs(); syncFavUi(); apply();
+      alert(`불러왔습니다. ${before}곳 → ${Object.keys(favs).length}곳`);
+    }catch(err){ alert('내 목록 파일이 아닌 것 같습니다.'); }
+    e.target.value='';
+  };
+  rd.readAsText(f);
+});
 $('#bReset').addEventListener('click',()=>{
   ['#fSido','#fCat','#fSrc','#fQ'].forEach(s=>$(s).value='');
   $('#fSort').value='name'; sortKey='name'; sortDir=1;
@@ -463,6 +575,7 @@ $('#bReset').addEventListener('click',()=>{
   document.querySelectorAll('.ds').forEach(c=>c.classList.add('on'));
   mode='or';
   document.querySelectorAll('.segb').forEach(b=>b.classList.toggle('on', b.dataset.mode==='or'));
+  favOnly=false; syncFavUi();          // ★내 목록 '내용'은 지우지 않는다(사용자 데이터)
   reflow();
 });
 document.querySelectorAll('th[data-s]').forEach(th=>th.addEventListener('click',()=>{
@@ -487,7 +600,7 @@ $('#pvTbl').addEventListener('click',e=>{
   apply(); window.scrollTo({top:0,behavior:'smooth'});
 });
 
-reflow(); $('#fQ').focus();
+syncFavUi(); reflow(); $('#fQ').focus();
 </script>
 </body>
 </html>

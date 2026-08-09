@@ -296,6 +296,34 @@ if short:
     raise RuntimeError("수집량 미달 → 배포 중단: %s (기준 %s)" % (short, MIN_ROWS))
 print("\n건전성 통과: %s" % dict(cnt))
 
+# ── HTML 엔티티 되돌리기 ──────────────────────────────────────────────
+# 원본 문자열에 엔티티가 그대로 들어 있다(안심식당 376건·모범음식점 24건, 전부 &amp;).
+# 그냥 두면 화면에 '본죽&amp;비빔밥' 처럼 글자로 보인다.
+# ★일부는 '&amp;amp;' 로 이중 인코딩돼 있어 한 번만 풀면 부족하다 → 안정될 때까지 반복.
+import html as _html
+
+
+def unesc(s):
+    if not s or "&" not in s:
+        return s
+    for _ in range(3):
+        n = _html.unescape(s)
+        if n == s:
+            break
+        s = n
+    return s
+
+
+ent_fixed = 0
+for r in recs:
+    for k in ("name", "addr", "detail", "src", "sgg", "sido"):
+        v = r[k]
+        u = unesc(v)
+        if u != v:
+            r[k] = u
+            ent_fixed += 1
+print("HTML 엔티티 복원 %s개 필드" % format(ent_fixed, ","))
+
 # ── 시군구 표기 통일 ──────────────────────────────────────────────────
 for r in recs:
     if r["sido"] == "세종특별자치시":
