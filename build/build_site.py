@@ -24,10 +24,17 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 MIN_ROWS = {"모범음식점": 5000, "착한가격업소": 5000, "백년가게": 500, "안심식당": 20000}
 
 
-def fetch(url, referer=None, retries=3, timeout=90):
-    """gzip 대응 + 재시도. 공공 API 가 간헐적으로 끊겨 1회 실패로 주간 갱신을 날리지 않게."""
+def fetch(url, referer=None, retries=5, timeout=180):
+    """gzip 대응 + 지수 백오프 재시도.
+
+    ★국내 공공 서버는 해외(GitHub 러너)에서 느리고 간헐적으로 끊긴다.
+      실측: LOCALDATA 17MB 다운로드가 90초 timeout 을 넘겨 3회 연속 실패했다.
+      한 번 끊겼다고 주간 갱신을 통째로 날리지 않도록 넉넉히 기다렸다 다시 친다.
+      대기 15→30→60→120초(합 ~4분). 스로틀이면 이 사이에 대개 풀린다.
+    """
     last = None
     for n in range(retries):
+        t0 = time.time()
         try:
             req = urllib.request.Request(url, headers={
                 "User-Agent": UA, "Accept-Encoding": "gzip",
@@ -39,8 +46,13 @@ def fetch(url, referer=None, retries=3, timeout=90):
                 return raw
         except Exception as e:                       # noqa: BLE001
             last = e
-            print("   재시도 %d/%d — %s" % (n + 1, retries, e))
-            time.sleep(3 * (n + 1))
+            if n == retries - 1:
+                break
+            wait = 15 * (2 ** n)
+            print("   재시도 %d/%d (%.0f초 만에 실패) — %s → %d초 대기"
+                  % (n + 1, retries, time.time() - t0, e, wait))
+            sys.stdout.flush()
+            time.sleep(wait)
     raise RuntimeError("수집 실패: %s — %s" % (url, last))
 
 

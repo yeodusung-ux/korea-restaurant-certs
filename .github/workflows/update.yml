@@ -14,7 +14,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write       # index.html 커밋용. 이 리포 안에서만 유효한 권한이라 PAT 불필요
 
