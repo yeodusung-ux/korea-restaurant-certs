@@ -3,7 +3,7 @@
 정부·공공기관이 각각 운영하는 **음식점 인증 4종**을 한 화면에서 지역·음식유형으로 찾아보는 도구입니다.
 페이지 하나로 끝나며 서버가 없습니다(정적 HTML).
 
-👉 **https://USERNAME.github.io/korea-restaurant-certs/** ← 리포 만든 뒤 이 줄을 실제 주소로 고치세요
+👉 **https://yeodusung-ux.github.io/korea-restaurant-certs/**
 
 | 인증 | 무엇을 보증하나 | 소관 |
 |---|---|---|
