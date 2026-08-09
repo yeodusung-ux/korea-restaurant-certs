@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>맛집 인증 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사</title>
+<title>맛집 인증 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사 · 식품안심업소</title>
 <style>
 :root{
   --bg:#f6f7f9; --panel:#fff; --ink:#1a1d21; --muted:#6b7280; --line:#e3e6ea;
   --accent:#1f6feb; --accent-soft:#e8f0fe; --chip:#f0f2f5; --hover:#f7f9fc;
-  --d1:#1f6feb; --d2:#0f9d58; --d3:#b8860b; --d4:#c2410c; --d5:#7c3aed;
+  --d1:#1f6feb; --d2:#0f9d58; --d3:#b8860b; --d4:#c2410c; --d5:#7c3aed; --d6:#0891b2;
   --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#272d36;
          --accent:#4b93ff; --accent-soft:#16273f; --chip:#1e242c; --hover:#1c222a;
-         --d1:#4b93ff; --d2:#3ddc84; --d3:#e0b950; --d4:#ff8a4c; --d5:#a78bfa;
+         --d1:#4b93ff; --d2:#3ddc84; --d3:#e0b950; --d4:#ff8a4c; --d5:#a78bfa; --d6:#22d3ee;
          --shadow:0 1px 3px rgba(0,0,0,.4); }
 }
 *{box-sizing:border-box}
@@ -85,6 +85,13 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .rslt{margin-top:10px;font-size:12.5px;line-height:1.85}
 .rslt b{color:var(--ink)}
 .rslt .miss{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{padding:6px 11px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+      border-radius:999px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;
+      white-space:nowrap}
+.chip:hover{background:var(--hover)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .c{opacity:.7;font-weight:500;margin-left:3px}
 .thumb{width:52px;height:52px;object-fit:cover;border-radius:7px;border:1px solid var(--line);
        float:left;margin:1px 9px 2px 0;background:var(--chip)}
 button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -182,9 +189,13 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
   <div class="card">
     <div class="filters">
       <div class="f"><label>시도</label><select id="fSido"></select></div>
-      <div class="f"><label>시군구</label><select id="fSgg"></select></div>
-      <div class="f"><label>음식 대분류</label><select id="fCat"></select></div>
+      <div class="f"><label>시 · 군</label><select id="fSgg"></select></div>
+      <div class="f"><label>구</label><select id="fGu"></select></div>
       <div class="f"><label>원본 분류</label><select id="fSrc"></select></div>
+      <div class="f wide">
+        <label>음식 대분류 <span style="font-weight:400;opacity:.8">— 여러 개 고를 수 있습니다</span></label>
+        <div class="chips" id="fCat"></div>
+      </div>
       <div class="f wide">
         <label>검색 (업소명 · 주소 · 메뉴/음식)</label>
         <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000" autocomplete="off">
@@ -263,6 +274,8 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
         (업종·연락처는 2022-07-13 파일본에서 이식)</li>
     <li><b>안심식당</b> · 농림축산식품부 안심식당 정보 — 2026-02-21 기준</li>
     <li><b>관광공사 맛집</b> · 한국관광공사 국문 관광정보(대한민국 구석구석) — 사진·대표메뉴·영업시간은 점진 수집 중</li>
+    <li><b>식품안심업소</b> · 식품의약품안전처(구 음식점 위생등급제) — <b>일반음식점·유효기간 내</b>만, 프랜차이즈 제외.
+        이 출처엔 음식종류 필드가 없어 <b>대분류는 상호명 추정</b>이라 상당수가 '기타'입니다</li>
   </ul>
   <p style="margin:8px 0 0">
     ⚖️ <b>비공식 도구입니다.</b> 각 인증기관·정부기관과 무관하며, 원본을 가공해 한 화면에서 보기 쉽게 만든 것뿐입니다.
@@ -283,10 +296,15 @@ if (!document.querySelector('meta[name="viewport"]')) {
 
 const D = /*__DATA__*/;
 const SIDO=D.sido, SGG=D.sgg, DS=D.ds, CAT=D.cat, SRC=D.src, R=D.rows;
-const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10,N_IMG=11;
-const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)'];
+const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10,N_IMG=11,N_GU=12;
+const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)','var(--d6)'];
 const GMASK=D.gmask;
 let cur=[], page=1, sortKey='name', sortDir=1, dsOn=new Set(DS), mode='or';
+let catSel = new Set();                 // 대분류 다중선택(비어 있으면 전체)
+const GU = D.gu || [''];
+// ★String.prototype.localeCompare 는 호출마다 Collator 를 새로 만든다.
+//   9만 행 정렬에서 이게 지배적이라 인스턴스를 하나 만들어 재사용한다(실측 수 배 빠름).
+const COLL = new Intl.Collator('ko');
 
 // 같은 가게로 묶인 그룹이 가진 인증 비트마스크. 묶이지 않은 행은 자기 출처 하나뿐.
 const rowMask = r => r[N_GID]>=0 ? GMASK[r[N_GID]] : (1<<r[N_DS]);
@@ -338,7 +356,7 @@ $('#footNote').innerHTML = `
  <b>안심식당</b>(음식종류 6종)·<b>착한가격업소</b>(업종 11종)는 원본이 열거형이라 <b>추측 없이 그대로 매핑</b>했지만,
  <b>모범음식점</b>(음식의유형 233종)·<b>백년가게</b>(주요사업 782종)는 자유입력이라 키워드 규칙으로 <b>추정</b>했습니다.
  정확한 값은 언제나 <b>원본분류</b> 열을 보세요.<br>
- ⚠️ <b>다섯 데이터는 서로 다른 제도</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생, 관광공사=관광 콘텐츠 선정.
+ ⚠️ <b>여섯 데이터는 서로 다른 제도</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생, 관광공사=관광 콘텐츠 선정, 식품안심업소=위생 인증.
  같은 가게가 둘 이상에 중복 등재될 수 있고, <b>중복 제거는 하지 않았습니다</b>(주소 표기가 달라 안전하게 합칠 수 없음).<br>
  ⚠️ 각 출처는 <b>지정 취소·폐업분을 걸러낸 유효분만</b> 담았습니다 —
  모범음식점 65,426→11,455 · 안심식당 67,740→42,630.<br>
@@ -389,30 +407,44 @@ function tally(key, extra){
   for(const i of POOL){ const r=R[i];
     if(extra&&!extra(r)) continue;
     const k=key(r); m.set(k,(m.get(k)||0)+1); }
-  return [...m.entries()].sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0],'ko'));
+  return [...m.entries()].sort((a,b)=> b[1]-a[1] || COLL.compare(a[0],b[0]));
 }
 function refreshOpts(){
   fill($('#fSido'), tally(r=>SIDO[r[N_SIDO]]), '시도 전체');
-  fill($('#fCat'),  tally(r=>CAT[r[N_CAT]]),   '대분류 전체');
   fill($('#fSrc'),  tally(r=>SRC[r[N_SRC]]),   '원본분류 전체');
+  // 대분류는 칩. 지금 풀에 있는 것만, 많은 순으로.
+  $('#fCat').innerHTML = tally(r=>CAT[r[N_CAT]]).map(([v,c])=>
+    `<button class="chip${catSel.has(v)?' on':''}" data-v="${esc(v)}">${esc(v)}<span class="c">${nf(c)}</span></button>`
+  ).join('');
   refreshSgg();
 }
 function refreshSgg(){
   const sd=$('#fSido').value;
-  fill($('#fSgg'), sd? tally(r=>SGG[r[N_SGG]], r=>SIDO[r[N_SIDO]]===sd):[], '시군구 전체');
+  fill($('#fSgg'), sd? tally(r=>SGG[r[N_SGG]], r=>SIDO[r[N_SIDO]]===sd):[], '시·군 전체');
   $('#fSgg').disabled=!sd;
+  refreshGu();
+}
+// 구는 시/군 아래에만 있다(광역시의 구는 이미 시·군 자리에 있다) → 없으면 잠근다
+function refreshGu(){
+  const sd=$('#fSido').value, sg=$('#fSgg').value;
+  const items = (sd&&sg) ? tally(r=>GU[r[N_GU]]||'',
+      r=>SIDO[r[N_SIDO]]===sd&&SGG[r[N_SGG]]===sg).filter(x=>x[0]) : [];
+  fill($('#fGu'), items, '구 전체');
+  $('#fGu').disabled = !items.length;
 }
 
 /* 필터 · 정렬 */
 function apply(reset){
-  const sd=$('#fSido').value, sg=$('#fSgg').value, ct=$('#fCat').value,
+  const sd=$('#fSido').value, sg=$('#fSgg').value, gu=$('#fGu').value,
         sc=$('#fSrc').value, q=$('#fQ').value.trim().toLowerCase();
+  const nCat=catSel.size;
   cur=[];
   for(const i of POOL){ const r=R[i];
     // favOnly 가 꺼져 있으면 단락 평가로 favKey 계산 자체를 건너뛴다(6.8만 행 정규식 비용)
     if((!favOnly || favs[favKey(r)]) &&
        (!sd||SIDO[r[N_SIDO]]===sd) && (!sg||SGG[r[N_SGG]]===sg) &&
-       (!ct||CAT[r[N_CAT]]===ct) && (!sc||SRC[r[N_SRC]]===sc) &&
+       (!gu||GU[r[N_GU]]===gu) &&
+       (!nCat||catSel.has(CAT[r[N_CAT]])) && (!sc||SRC[r[N_SRC]]===sc) &&
        (!q ||SEARCH[i].includes(q))) cur.push(r);
   }
   const K={ name:r=>r[N_NAME], region:r=>SIDO[r[N_SIDO]]+' '+SGG[r[N_SGG]]+' '+r[N_NAME],
@@ -420,7 +452,15 @@ function apply(reset){
     src:r=>SRC[r[N_SRC]]+' '+r[N_NAME], detail:r=>r[N_DET]+' '+r[N_NAME],
     tel:r=>r[N_TEL], date:r=>r[N_DATE], new:r=>r[N_DATE] }[sortKey]||(r=>r[N_NAME]);
   const dir = sortKey==='new' ? -1 : sortDir;
-  cur=cur.slice().sort((a,b)=>K(a).localeCompare(K(b),'ko')*dir);
+  // ★정렬 키를 행마다 한 번만 만든다.
+  //   비교 함수 안에서 K() 를 부르면 5만 행 정렬에 문자열 조립이 150만 번 일어난다.
+  //   인덱스만 정렬한 뒤 되짚으면 K() 호출이 행 수만큼으로 줄어든다.
+  const keys=new Array(cur.length), ord=new Array(cur.length);
+  for(let i=0;i<cur.length;i++){ keys[i]=K(cur[i]); ord[i]=i; }
+  ord.sort((x,y)=>COLL.compare(keys[x],keys[y])*dir);
+  const sorted=new Array(cur.length);
+  for(let i=0;i<ord.length;i++) sorted[i]=cur[ord[i]];
+  cur=sorted;
   if(reset!==false) page=1;
   render();
 }
@@ -447,7 +487,7 @@ function render(){
         fv ? `<button class="memo-edit" data-k="${esc(fk)}">${fv.m?'✎ 메모':'✎ 메모 달기'}</button>` : ''}${
         fv && fv.m ? `<div class="memo">${esc(fv.m)}</div>` : ''}</td>
       <td class="cert">${badges}</td>
-      <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}</td>
+      <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}${r[N_GU]?' '+esc(GU[r[N_GU]]):''}</td>
       <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
       <td class="c-src" data-label="분류">${esc(SRC[r[N_SRC]])||'-'}</td>
       <td class="detail" data-label="메뉴">${esc(r[N_DET])||'<span style="color:var(--muted)">-</span>'}</td>
@@ -487,11 +527,11 @@ function buildPivot(){
 }
 
 function toCsv(){
-  const head=['내목록','메모','인증','업소명','시도','시군구','대분류','원본분류','상세','주소','전화번호','지정일'];
+  const head=['내목록','메모','인증','업소명','시도','시·군','구','대분류','원본분류','상세','주소','전화번호','지정일'];
   const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   const certs=r=>DS.filter((d,k)=>(rowMask(r)>>k&1)).join(' · ');
   const fv=r=>favs[favKey(r)];
-  const body=cur.map(r=>[fv(r)?'★':'', (fv(r)&&fv(r).m)||'', certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],CAT[r[N_CAT]],
+  const body=cur.map(r=>[fv(r)?'★':'', (fv(r)&&fv(r).m)||'', certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],GU[r[N_GU]]||'',CAT[r[N_CAT]],
                          SRC[r[N_SRC]],r[N_DET],r[N_ADDR],r[N_TEL],r[N_DATE]].map(q).join(','));
   const b=new Blob(['﻿'+[head.map(q).join(','),...body].join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b);
@@ -514,8 +554,16 @@ document.querySelectorAll('.segb').forEach(b=> b.addEventListener('click',()=>{
   document.querySelectorAll('.segb').forEach(x=>x.classList.remove('on'));
   b.classList.add('on'); mode=b.dataset.mode; reflow();
 }));
-$('#fSido').addEventListener('change',()=>{ $('#fSgg').value=''; refreshSgg(); apply(); });
-['#fSgg','#fCat','#fSrc'].forEach(s=>$(s).addEventListener('change',()=>apply()));
+$('#fSido').addEventListener('change',()=>{ $('#fSgg').value=''; $('#fGu').value=''; refreshSgg(); apply(); });
+$('#fSgg').addEventListener('change',()=>{ $('#fGu').value=''; refreshGu(); apply(); });
+['#fGu','#fSrc'].forEach(s=>$(s).addEventListener('change',()=>apply()));
+$('#fCat').addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  const v=c.dataset.v;
+  if(catSel.has(v)) catSel.delete(v); else catSel.add(v);
+  c.classList.toggle('on', catSel.has(v));
+  apply();
+});
 $('#fFood').addEventListener('change',()=>{ reflow(); });
 let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>apply(),180);});
 $('#fSort').addEventListener('change',e=>{sortKey=e.target.value;sortDir=1;apply();});
@@ -660,7 +708,8 @@ $('#favFile').addEventListener('change',e=>{
   rd.readAsText(f);
 });
 $('#bReset').addEventListener('click',()=>{
-  ['#fSido','#fCat','#fSrc','#fQ'].forEach(s=>$(s).value='');
+  ['#fSido','#fSgg','#fGu','#fSrc','#fQ'].forEach(s=>$(s).value='');
+  catSel.clear();
   $('#fSort').value='name'; sortKey='name'; sortDir=1;
   $('#fFood').checked=true;
   // 인증 선택·모드까지 되돌린다(부분 초기화는 "왜 안 돌아오지"를 부른다)
@@ -688,9 +737,10 @@ document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
 $('#pvTbl').addEventListener('click',e=>{
   const td=e.target.closest('td.n'); if(!td) return;
   $('#fSido').value=td.dataset.sido||''; $('#fSgg').value=''; refreshSgg();
-  $('#fCat').value=td.dataset.cat||''; $('#fSrc').value=''; $('#fQ').value='';
+  catSel.clear(); if(td.dataset.cat) catSel.add(td.dataset.cat);
+  $('#fSrc').value=''; $('#fQ').value=''; $('#fGu').value='';
   document.querySelector('.tab[data-view="list"]').click();
-  apply(); window.scrollTo({top:0,behavior:'smooth'});
+  refreshOpts(); apply(); window.scrollTo({top:0,behavior:'smooth'});
 });
 
 syncFavUi(); reflow(); $('#fQ').focus();

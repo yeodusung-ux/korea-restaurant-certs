@@ -22,7 +22,7 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 # 소스별 최소 기대 건수(실측의 절반 수준) — 미달이면 수집이 깨진 것으로 본다
 MIN_ROWS = {"모범음식점": 5000, "착한가격업소": 5000, "백년가게": 500,
-            "안심식당": 20000, "관광공사 맛집": 5000}
+            "안심식당": 20000, "관광공사 맛집": 5000, "식품안심업소": 3000}
 
 
 def fetch(url, referer=None, retries=5, timeout=180):
@@ -423,6 +423,59 @@ for r in ans:
                      addr=addr, tel=(r.get("RELAX_RSTRNT_TEL") or "").strip(),
                      date=(r.get("RELAX_RSTRNT_REG_DT") or "").strip()))
 
+# ── ⑥ 식품안심업소(구 위생등급제) ─────────────────────────────────────
+# 식약처 지정. data.go.kr 은 LINK 창구일 뿐이고 실서버는 식품안전나라라 **별도 키**가 필요하다.
+#
+# ★이 출처만 3중 필터가 필요하다 — 다른 5종과 달리 **유효기간(ASGN_TO)** 이 있다.
+#   실측에서 스타벅스 선릉로점이 당일 만료였다. 만료·지정취소·폐업을 안 거르면 죽은 인증이 뜬다.
+# ★일반음식점만 + 프랜차이즈 제외(실측 37,996 → 17,481 → 11,408).
+#   본사 일괄신청이라 메가커피 1,126·스타벅스 960 같은 체인이 43%였다.
+# ⚠️ 이 데이터엔 **음식종류 필드가 없다.** 대분류는 상호명 추정이라 약 68%가 '기타'로 남는다.
+print("⑥ 식품안심업소 수집")
+MFDS = env_key("MFDS_KEY")
+if not MFDS:
+    raise RuntimeError("MFDS_KEY 시크릿이 없다 (식품안전나라 인증키)")
+C004 = "http://openapi.foodsafetykorea.go.kr/api/%s/C004/json/%%d/%%d" % MFDS
+TODAY = time.strftime("%Y%m%d")
+
+_p = json.loads(fetch(C004 % (1, 1)).decode("utf-8"))["C004"]
+if (_p.get("RESULT") or {}).get("CODE") not in (None, "INFO-000"):
+    raise RuntimeError("식품안심업소 인증 실패: %s" % (_p.get("RESULT") or {}).get("MSG"))
+hg_total = int(_p["total_count"])
+hg_rows, _i = [], 1
+while _i <= hg_total:
+    _j = min(_i + 999, hg_total)
+    _got = (json.loads(fetch(C004 % (_i, _j)).decode("utf-8"))["C004"].get("row")) or []
+    if not _got:
+        break
+    hg_rows.extend(_got)
+    _i = _j + 1
+    time.sleep(0.1)
+
+hg_live = [r for r in hg_rows
+           if g(r, "INDUTY_NM") == "일반음식점"
+           and not g(r, "ASGN_CANCEL_YMD") and not g(r, "CLSBIZ_DT")
+           and (not g(r, "ASGN_TO") or g(r, "ASGN_TO") >= TODAY)]
+_BR = re.compile(r"[\s()]*(\S{1,10})?(점|지점|본점|DT점)$")
+_base = lambda x: _BR.sub("", (x or "").strip()) or x
+_cnt = collections.Counter(_base(g(r, "BSSH_NM")) for r in hg_live)
+_chain = set(k for k, v in _cnt.items() if v >= 5)
+hg = [r for r in hg_live if _base(g(r, "BSSH_NM")) not in _chain]
+print("   전체 %s → 일반음식점·유효 %s → 프랜차이즈 제외 %s"
+      % (format(len(hg_rows), ","), format(len(hg_live), ","), format(len(hg), ",")))
+
+for r in hg:
+    # ★PRSDNT_NM(대표자 실명)은 개인정보라 읽지 않는다
+    addr = g(r, "ADDR")
+    t = addr.split()
+    sgg = t[1] if len(t) >= 2 else "(미상)"
+    ymd = g(r, "HG_ASGN_YMD")
+    recs.append(dict(ds="식품안심업소", name=g(r, "BSSH_NM"),
+                     sido=norm_sido(t[0] if t else "", sgg), sgg=sgg,
+                     cat=classify(g(r, "BSSH_NM")), src="일반음식점", detail="",
+                     addr=addr, tel=g(r, "TELNO"),
+                     date=("%s-%s-%s" % (ymd[:4], ymd[4:6], ymd[6:])) if len(ymd) == 8 else ""))
+
 # ── 수집 건전성 검사 — 하나라도 미달이면 index.html 을 건드리지 않는다 ──
 cnt = collections.Counter(r["ds"] for r in recs)
 short = {k: cnt[k] for k, lo in MIN_ROWS.items() if cnt[k] < lo}
@@ -457,6 +510,13 @@ for r in recs:
             r[k] = u
             ent_fixed += 1
 print("HTML 엔티티 복원 %s개 필드" % format(ent_fixed, ","))
+
+# ── 구(區) 추출 — 시도 → 시/군 → 구 3단계 선택용 ────────────────────
+# 시군구는 시/군 레벨로 통일해 두었으므로(출처마다 세밀도가 달랐다) 구는 주소에서 따로 뽑는다.
+# 광역시의 구는 이미 시군구 자리에 있어 여기서는 빈값이 된다.
+for r in recs:
+    _t = (r["addr"] or "").split()
+    r["gu"] = _t[2] if (len(_t) >= 3 and _t[1].endswith("시") and _t[2].endswith("구")) else ""
 
 # ── 시군구 표기 통일 ──────────────────────────────────────────────────
 for r in recs:
@@ -535,7 +595,7 @@ for ix in ba.values():                # 같은 건물이라도 상호가 다르�
                 if similar(recs[ix[x]]["name"], recs[ix[y]]["name"]):
                     union(ix[x], ix[y])
 
-DS_ORDER = ["모범음식점", "착한가격업소", "백년가게", "안심식당", "관광공사 맛집"]
+DS_ORDER = ["모범음식점", "착한가격업소", "백년가게", "안심식당", "관광공사 맛집", "식품안심업소"]
 mem = collections.defaultdict(list)
 for i in range(len(recs)):
     mem[find(i)].append(i)
@@ -555,7 +615,7 @@ multi = collections.Counter(bin(m).count("1") for m in gmask)
 print("중복등재 그룹 %s개 — %s" % (format(len(gmask), ","), dict(sorted(multi.items()))))
 
 # ── 직렬화 · 페이지 생성 ──────────────────────────────────────────────
-sidos, sggs, cats, srcs = [], [], [], []
+sidos, sggs, cats, srcs, gus = [], [], [], [], [""]   # gus[0]="" = 구 없음
 dss = DS_ORDER[:]
 
 
@@ -568,7 +628,8 @@ def ix_of(lst, v):
 recs.sort(key=lambda r: (r["ds"], r["sido"], r["sgg"], r["name"]))
 out = [[r["name"], ix_of(sidos, r["sido"]), ix_of(sggs, r["sgg"]), dss.index(r["ds"]),
         ix_of(cats, r["cat"]), ix_of(srcs, r["src"]), r["detail"], r["addr"],
-        r["tel"], r["date"], r.get("gid", -1), r.get("img", "")] for r in recs]
+        r["tel"], r["date"], r.get("gid", -1), r.get("img", ""),
+        ix_of(gus, r.get("gu", ""))] for r in recs]
 
 today = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 9 * 3600))   # KST
 DS_META = {
@@ -582,8 +643,10 @@ DS_META = {
                   "note": "지정 유효분만 (취소분 제외)"},
     "관광공사 맛집": {"n": cnt["관광공사 맛집"], "date": today, "org": "한국관광공사",
                   "note": "구석구석 선정 · 사진·대표메뉴(점진 수집)"},
+    "식품안심업소": {"n": cnt["식품안심업소"], "date": today, "org": "식품의약품안전처",
+                  "note": "일반음식점·유효기간 내 · 프랜차이즈 제외 · 대분류는 상호명 추정"},
 }
-data = {"sido": sidos, "sgg": sggs, "ds": dss, "cat": cats, "src": srcs, "rows": out,
+data = {"sido": sidos, "sgg": sggs, "ds": dss, "cat": cats, "src": srcs, "gu": gus, "rows": out,
         "cats": CAT_ORDER, "meta": DS_META, "total": len(out), "gmask": gmask,
         "built": today}
 

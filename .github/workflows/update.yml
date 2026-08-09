@@ -29,6 +29,7 @@ jobs:
         env:
           ODCLOUD_KEY: ${{ secrets.ODCLOUD_KEY }}   # data.go.kr 일반 인증키(백년가게)
           MAFRA_KEY: ${{ secrets.MAFRA_KEY }}       # data.mafra.go.kr 인증키(안심식당)
+          MFDS_KEY: ${{ secrets.MFDS_KEY }}         # 식품안전나라 인증키(식품안심업소)
         run: python build/build_site.py
         # ★빌드가 실패하면 여기서 멈춘다. index.html 은 손대지 않았으므로
         #   사이트는 직전 정상본을 그대로 유지한다(부분 데이터 배포 방지).
