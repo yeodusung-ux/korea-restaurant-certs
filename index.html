@@ -65,11 +65,13 @@ th:hover{color:var(--accent)}
 tbody tr:hover{background:var(--hover)}
 td.name{font-weight:600;white-space:nowrap}
 td.addr{color:var(--muted);font-size:12px;min-width:190px}
-td.detail{font-size:12px;max-width:250px}
+td.detail{font-size:12px;max-width:250px;min-width:150px}
+td.detail span.clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+                    overflow:hidden}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .pill{color:var(--muted);white-space:nowrap;font-size:11.5px}
-.badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;line-height:1.5;
-       font-weight:700;white-space:nowrap;color:#fff;margin:1px 2px 1px 0;letter-spacing:.02em}
+.badge{display:inline-block;padding:1px 5px;border-radius:4px;font-size:10px;line-height:1.5;
+       font-weight:600;white-space:nowrap;color:#fff;margin:1px 2px 1px 0;letter-spacing:-.2px}
 .fav{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;padding:0 6px 0 0;
      color:var(--line);font-family:inherit}
 .fav:hover{color:#f0a020}
@@ -88,7 +90,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .stars{color:#c8901a;font-size:11px;font-weight:700;white-space:nowrap;margin-right:5px;
        font-variant-numeric:tabular-nums}
 .stars .off{display:none}
-td.cert{min-width:212px}
+td.cert{min-width:206px}
 .chips{display:flex;flex-wrap:wrap;gap:4px}
 .chip{padding:3px 8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
       border-radius:999px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;
@@ -159,6 +161,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
   td.name{display:block;font-size:15px;font-weight:700;padding:0 0 4px;white-space:normal}
   td.cert{display:block;padding-bottom:5px}
   td.detail,td.addr{max-width:none;min-width:0}
+  td.detail span.clip{-webkit-line-clamp:none;display:inline}
   td.addr a{word-break:break-all}
   .pager{gap:5px}
   .pager button{min-width:40px;padding:9px 10px}
@@ -354,16 +357,11 @@ $('#hTotal').textContent = nf(D.total);
 $('#hDs').textContent = DS.length;
 
 /* 출처 카드 */
-// 인증 이름은 길어서 배지·토글에 그대로 쓰면 줄이 밀린다. 2글자로 줄인다.
-// '안심식당'과 '식품안심업소'가 겹치므로 후자는 옛 이름(위생등급제)을 따 '위생'.
-const DSHORT={'모범음식점':'모범','착한가격업소':'착한','백년가게':'백년',
-              '안심식당':'안심','관광공사 맛집':'관광','식품안심업소':'위생'};
-const sname = d => DSHORT[d] || d;
 $('#dsBar').innerHTML = DS.map((d,i)=>{
   const m=D.meta[d]||{};
   return `<button class="ds on" data-ds="${esc(d)}" title="${esc(d)} · ${nf(m.n||0)}개소 · ${esc(m.org||'')}
 ${esc(m.note||'')}">`
-    +`<i style="background:${DCOL[i]}"></i>${esc(sname(d))}<em>${nf(m.n||0)}</em></button>`;
+    +`<i style="background:${DCOL[i]}"></i>${esc(d)}<em>${nf(m.n||0)}</em></button>`;
 }).join('');
 
 $('#footNote').innerHTML = `
@@ -496,7 +494,7 @@ function render(){
     // 그 가게가 가진 인증을 전부 보여준다. 합집합 모드에선 지금 줄의 출처만 진하게.
     // 한 줄은 '그 가게'를 가리키므로 가진 인증을 모두 같은 강도로 보여준다.
     const badges=DS.map((d,k)=> (m>>k&1)
-      ? `<span class="badge" style="background:${DCOL[k]}" title="${esc(d)}">${esc(sname(d))}</span>`
+      ? `<span class="badge" style="background:${DCOL[k]}">${esc(d)}</span>`
       : '').join('');
     const tel=r[N_TEL]?`<a href="tel:${esc(r[N_TEL].replace(/[^0-9+]/g,''))}">${esc(r[N_TEL])}</a>`
                       :'<span style="color:var(--muted)">-</span>';
@@ -509,7 +507,7 @@ function render(){
       <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}${r[N_GU]?' '+esc(GU[r[N_GU]]):''}</td>
       <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
       <td class="c-src" data-label="분류">${esc(SRC[r[N_SRC]])||'-'}</td>
-      <td class="detail" data-label="메뉴">${esc(r[N_DET])||'<span style="color:var(--muted)">-</span>'}</td>
+      <td class="detail" data-label="메뉴">${r[N_DET]?`<span class="clip" title="${esc(r[N_DET])}">${esc(r[N_DET])}</span>`:'<span style="color:var(--muted)">-</span>'}</td>
       <td class="addr" data-label="주소"><a href="https://map.kakao.com/link/search/${encodeURIComponent(r[N_ADDR])}" target="_blank" rel="noopener" title="${esc(r[N_ADDR])}">${esc(shortAddr(r))}</a></td>
       <td class="c-tel" data-label="전화">${tel}</td>
       <td class="c-date" data-label="지정일">${esc(r[N_DATE])||'-'}</td></tr>`;
