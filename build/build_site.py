@@ -614,6 +614,61 @@ for grp in mem.values():
 multi = collections.Counter(bin(m).count("1") for m in gmask)
 print("중복등재 그룹 %s개 — %s" % (format(len(gmask), ","), dict(sorted(multi.items()))))
 
+
+# ── 깨진 업소명(？) 복원 ──────────────────────────────────────────────
+# 원본 DB 가 CP949 로 못 담는 글자(é·한자 등)를 저장 단계에서 '？' 로 날려버렸다.
+# 그 행만 보면 복원이 불가능하지만, **같은 가게가 다른 출처에 멀쩡한 이름으로** 있으면 살릴 수 있다.
+#   ① 동일가게 그룹(전화·주소+상호로 이미 묶어 둔 것)에 성한 이름이 있으면 그걸 쓴다
+#   ② 그룹이 안 잡혔어도 **주소가 같고 ？ 를 와일드카드로 봤을 때 맞는** 이름이 있으면 쓴다
+#      (길이가 같고 ？ 아닌 자리가 전부 일치해야 하므로 엉뚱한 가게가 붙지 않는다)
+#   ③ 그래도 안 되면 'caf？' → 'cafe' 만 고친다(①에서 실제로 확인된 치환)
+BADQ = "？?"
+is_bad = lambda x: any(c in x for c in BADQ)
+
+
+def _wild_ok(bad, good):
+    if len(bad) != len(good):
+        return False
+    for a, b in zip(bad, good):
+        if a in BADQ:
+            continue
+        if a != b:
+            return False
+    return True
+
+
+_by_addr = collections.defaultdict(list)
+for r in recs:
+    m = RD.search(r["addr"])
+    if m:
+        _by_addr[(r["sgg"], m.group(1), m.group(2))].append(r)
+_by_grp = collections.defaultdict(list)
+for r in recs:
+    if r.get("gid", -1) >= 0:
+        _by_grp[r["gid"]].append(r)
+
+fix_grp = fix_addr = fix_caf = 0
+for r in recs:
+    if not is_bad(r["name"]):
+        continue
+    cand = [x["name"] for x in _by_grp.get(r.get("gid", -1), []) if not is_bad(x["name"])]
+    if cand:
+        r["name"] = max(cand, key=len); fix_grp += 1; continue
+    m = RD.search(r["addr"])
+    if m:
+        cand = [x["name"] for x in _by_addr[(r["sgg"], m.group(1), m.group(2))]
+                if not is_bad(x["name"]) and _wild_ok(r["name"], x["name"])]
+        if cand:
+            r["name"] = cand[0]; fix_addr += 1; continue
+    low = r["name"].lower()
+    if "caf？" in low or "caf?" in low:
+        i = low.replace("caf?", "caf？").index("caf？")
+        r["name"] = r["name"][:i + 3] + "e" + r["name"][i + 4:]; fix_caf += 1
+
+left = sum(1 for r in recs if is_bad(r["name"]))
+print("업소명 복원 — 그룹 %d · 주소와일드 %d · cafe %d · 남은 %d건"
+      % (fix_grp, fix_addr, fix_caf, left))
+
 # ── 직렬화 · 페이지 생성 ──────────────────────────────────────────────
 sidos, sggs, cats, srcs, gus = [], [], [], [], [""]   # gus[0]="" = 구 없음
 dss = DS_ORDER[:]

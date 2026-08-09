@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>맛집 인증 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사 · 식품안심업소</title>
+<title>좋은 음식점 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사 · 식품안심업소</title>
 <style>
 :root{
   --bg:#f6f7f9; --panel:#fff; --ink:#1a1d21; --muted:#6b7280; --line:#e3e6ea;
@@ -85,6 +85,10 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .rslt{margin-top:10px;font-size:12.5px;line-height:1.85}
 .rslt b{color:var(--ink)}
 .rslt .miss{color:var(--muted)}
+.stars{color:#f0a020;font-size:13px;letter-spacing:-1px;white-space:nowrap;display:block;
+       margin-bottom:3px;font-weight:700}
+.stars .off{color:var(--line)}
+.stars b{font-size:11px;color:var(--muted);letter-spacing:0;margin-left:4px;font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:5px}
 .chip{padding:6px 11px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
       border-radius:999px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;
@@ -166,7 +170,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 <body>
 <div class="wrap">
 <header>
-  <h1>🍚 맛집 인증 통합 조회</h1>
+  <h1>🍚 좋은 음식점 통합 조회</h1>
   <div class="sub">공공데이터 <b id="hDs">4</b>종 통합 <b id="hTotal">0</b>건 · 카드를 눌러 출처를 켜고 끕니다</div>
 </header>
 
@@ -207,6 +211,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <label class="chk"><input type="checkbox" id="fFood" checked> 요식업만</label>
       <div class="f" style="min-width:165px">
         <select id="fSort">
+          <option value="certs">정렬: ★ 인증 많은순</option>
           <option value="name">정렬: 업소명순</option>
           <option value="region">정렬: 지역순</option>
           <option value="ds">정렬: 출처순</option>
@@ -242,7 +247,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
     <table>
       <thead><tr>
         <th data-s="name">업소명</th>
-        <th data-s="ds">인증</th>
+        <th data-s="certs">★ 인증</th>
         <th data-s="region">지역</th>
         <th data-s="cat">대분류</th>
         <th data-s="src">원본분류</th>
@@ -299,7 +304,7 @@ const SIDO=D.sido, SGG=D.sgg, DS=D.ds, CAT=D.cat, SRC=D.src, R=D.rows;
 const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10,N_IMG=11,N_GU=12;
 const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)','var(--d6)'];
 const GMASK=D.gmask;
-let cur=[], page=1, sortKey='name', sortDir=1, dsOn=new Set(DS), mode='or';
+let cur=[], page=1, sortKey='certs', sortDir=1, dsOn=new Set(DS), mode='or';
 let catSel = new Set();                 // 대분류 다중선택(비어 있으면 전체)
 const GU = D.gu || [''];
 // ★String.prototype.localeCompare 는 호출마다 Collator 를 새로 만든다.
@@ -311,6 +316,8 @@ const rowMask = r => r[N_GID]>=0 ? GMASK[r[N_GID]] : (1<<r[N_DS]);
 // 교집합 모드에서 한 가게를 한 줄로 접을 때 쓰는 키(묶이지 않은 행은 행 자신이 곧 가게)
 const storeKey = r => r[N_GID]>=0 ? r[N_GID] : r;
 const selMask = () => [...dsOn].reduce((m,d)=> m|(1<<DS.indexOf(d)), 0);
+// ★인증 하나당 별 하나. 같은 가게로 묶인 그룹이 가진 인증 수가 곧 별점이다.
+const certN = r => { let m=rowMask(r), c=0; while(m){ c+=m&1; m>>>=1; } return c; };
 
 /* ── 내 목록(즐겨찾기) ────────────────────────────────────────────────
    이 브라우저에만 저장된다. 사이트에 올라가지 않고 남에게 보이지 않는다.
@@ -447,7 +454,7 @@ function apply(reset){
        (!nCat||catSel.has(CAT[r[N_CAT]])) && (!sc||SRC[r[N_SRC]]===sc) &&
        (!q ||SEARCH[i].includes(q))) cur.push(r);
   }
-  const K={ name:r=>r[N_NAME], region:r=>SIDO[r[N_SIDO]]+' '+SGG[r[N_SGG]]+' '+r[N_NAME],
+  const K={ certs:r=>r[N_NAME], name:r=>r[N_NAME].replace(/[？?]/g,'')||'￿', region:r=>SIDO[r[N_SIDO]]+' '+SGG[r[N_SGG]]+' '+r[N_NAME],
     ds:r=>DS[r[N_DS]]+' '+r[N_NAME], cat:r=>CAT[r[N_CAT]]+' '+r[N_NAME],
     src:r=>SRC[r[N_SRC]]+' '+r[N_NAME], detail:r=>r[N_DET]+' '+r[N_NAME],
     tel:r=>r[N_TEL], date:r=>r[N_DATE], new:r=>r[N_DATE] }[sortKey]||(r=>r[N_NAME]);
@@ -455,9 +462,26 @@ function apply(reset){
   // ★정렬 키를 행마다 한 번만 만든다.
   //   비교 함수 안에서 K() 를 부르면 5만 행 정렬에 문자열 조립이 150만 번 일어난다.
   //   인덱스만 정렬한 뒤 되짚으면 K() 호출이 행 수만큼으로 줄어든다.
+  if(sortKey==='certs' && mode!=='and'){
+    // ★별점순은 '좋은 집 순으로 보기'다. 같은 가게가 인증 수만큼 연달아 나오면 목록이 망가진다.
+    //   교집합 모드는 이미 접혀 있으므로 합집합일 때만 접는다.
+    const best=new Map();
+    for(const r of cur){
+      const k=storeKey(r), c=best.get(k);
+      if(c===undefined || score(r)>score(c)) best.set(k,r);
+    }
+    cur=[...best.values()];
+  }
   const keys=new Array(cur.length), ord=new Array(cur.length);
-  for(let i=0;i<cur.length;i++){ keys[i]=K(cur[i]); ord[i]=i; }
-  ord.sort((x,y)=>COLL.compare(keys[x],keys[y])*dir);
+  if(sortKey==='certs'){
+    // 별점은 숫자라 문자열 비교를 쓰지 않는다. 같은 별점이면 업소명순.
+    const cn=new Array(cur.length);
+    for(let i=0;i<cur.length;i++){ cn[i]=certN(cur[i]); keys[i]=cur[i][N_NAME]; ord[i]=i; }
+    ord.sort((x,y)=> (cn[y]-cn[x]) || COLL.compare(keys[x],keys[y]));
+  } else {
+    for(let i=0;i<cur.length;i++){ keys[i]=K(cur[i]); ord[i]=i; }
+    ord.sort((x,y)=>COLL.compare(keys[x],keys[y])*dir);
+  }
   const sorted=new Array(cur.length);
   for(let i=0;i<ord.length;i++) sorted[i]=cur[ord[i]];
   cur=sorted;
@@ -467,14 +491,14 @@ function apply(reset){
 
 function render(){
   $('#cNum').textContent=nf(cur.length);
-  const unit = mode==='and' ? '곳' : '건';
+  const unit = (mode==='and' || sortKey==='certs') ? '곳' : '건';
   $('#cUnit').textContent = unit;
   $('#cOf').textContent = cur.length===POOL.length ? '' : ' / '+nf(POOL.length)+unit;
   const maxP=Math.max(1,Math.ceil(cur.length/PER)); if(page>maxP) page=maxP;
   const sl=cur.slice((page-1)*PER,page*PER);
   $('#noRes').classList.toggle('hide',cur.length>0);
   $('#tb').innerHTML=sl.map(r=>{
-    const m=rowMask(r);
+    const m=rowMask(r), cn=certN(r);
     // 그 가게가 가진 인증을 전부 보여준다. 합집합 모드에선 지금 줄의 출처만 진하게.
     const badges=DS.map((d,k)=> (m>>k&1)
       ? `<span class="badge${(mode==='and'||k===r[N_DS])?'':' dim'}" style="background:${DCOL[k]}">${esc(d)}</span>`
@@ -486,7 +510,8 @@ function render(){
       <td class="name">${r[N_IMG]?`<img class="thumb" src="${esc(r[N_IMG])}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}<button class="fav${fv?' on':''}" data-k="${esc(fk)}" title="내 목록에 담기">${fv?'★':'☆'}</button>${esc(r[N_NAME])}${
         fv ? `<button class="memo-edit" data-k="${esc(fk)}">${fv.m?'✎ 메모':'✎ 메모 달기'}</button>` : ''}${
         fv && fv.m ? `<div class="memo">${esc(fv.m)}</div>` : ''}</td>
-      <td class="cert">${badges}</td>
+      <td class="cert"><span class="stars" title="인증 ${cn}개">${'★'.repeat(cn)}${
+        cn<DS.length?`<span class="off">${'☆'.repeat(DS.length-cn)}</span>`:''}<b>${cn}</b></span>${badges}</td>
       <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}${r[N_GU]?' '+esc(GU[r[N_GU]]):''}</td>
       <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
       <td class="c-src" data-label="분류">${esc(SRC[r[N_SRC]])||'-'}</td>
@@ -527,11 +552,11 @@ function buildPivot(){
 }
 
 function toCsv(){
-  const head=['내목록','메모','인증','업소명','시도','시·군','구','대분류','원본분류','상세','주소','전화번호','지정일'];
+  const head=['내목록','메모','별점','인증','업소명','시도','시·군','구','대분류','원본분류','상세','주소','전화번호','지정일'];
   const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   const certs=r=>DS.filter((d,k)=>(rowMask(r)>>k&1)).join(' · ');
   const fv=r=>favs[favKey(r)];
-  const body=cur.map(r=>[fv(r)?'★':'', (fv(r)&&fv(r).m)||'', certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],GU[r[N_GU]]||'',CAT[r[N_CAT]],
+  const body=cur.map(r=>[fv(r)?'★':'', (fv(r)&&fv(r).m)||'', certN(r), certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],GU[r[N_GU]]||'',CAT[r[N_CAT]],
                          SRC[r[N_SRC]],r[N_DET],r[N_ADDR],r[N_TEL],r[N_DATE]].map(q).join(','));
   const b=new Blob(['﻿'+[head.map(q).join(','),...body].join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b);
@@ -710,7 +735,7 @@ $('#favFile').addEventListener('change',e=>{
 $('#bReset').addEventListener('click',()=>{
   ['#fSido','#fSgg','#fGu','#fSrc','#fQ'].forEach(s=>$(s).value='');
   catSel.clear();
-  $('#fSort').value='name'; sortKey='name'; sortDir=1;
+  $('#fSort').value='certs'; sortKey='certs'; sortDir=1;
   $('#fFood').checked=true;
   // 인증 선택·모드까지 되돌린다(부분 초기화는 "왜 안 돌아오지"를 부른다)
   dsOn=new Set(DS);
@@ -723,7 +748,7 @@ $('#bReset').addEventListener('click',()=>{
 document.querySelectorAll('th[data-s]').forEach(th=>th.addEventListener('click',()=>{
   const k=th.dataset.s;
   if(sortKey===k) sortDir*=-1; else {sortKey=k;sortDir=1;}
-  $('#fSort').value=['name','region','ds','new'].includes(k)?k:'';
+  $('#fSort').value=['certs','name','region','ds','new'].includes(k)?k:'';
   apply(false);
 }));
 $('#pg').addEventListener('click',e=>{const b=e.target.closest('button');
