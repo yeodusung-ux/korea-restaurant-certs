@@ -206,7 +206,13 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <div class="count"><b id="cNum">0</b><span id="cUnit">건</span><span id="cOf" style="color:var(--muted)"></span></div>
       <div class="spacer"></div>
       <label class="chk"><input type="checkbox" id="fFood" checked> 요식업만</label>
-      <div class="f" style="min-width:165px">
+      <div class="f" style="min-width:112px">
+        <select id="fMap">
+          <option value="naver">🗺 네이버지도</option>
+          <option value="kakao">🗺 카카오맵</option>
+        </select>
+      </div>
+      <div class="f" style="min-width:150px">
         <select id="fSort">
           <option value="certs">정렬: ★ 인증 많은순</option>
           <option value="name">정렬: 업소명순</option>
@@ -319,6 +325,12 @@ function shortAddr(r){
   if(t.length>2){ t.shift(); if(t[0]===SGG[r[N_SGG]]) t.shift(); }
   return t.join(' ');
 }
+// 주소를 누르면 열리는 지도. 선택은 이 브라우저에 기억된다(기본 네이버).
+const MAP_LS='restcert.map';
+let mapSvc = (()=>{ try{ return localStorage.getItem(MAP_LS)||'naver'; }catch(e){ return 'naver'; } })();
+const MAPS={ naver:{name:'네이버지도', url:q=>'https://map.naver.com/p/search/'+encodeURIComponent(q)},
+             kakao:{name:'카카오맵',   url:q=>'https://map.kakao.com/link/search/'+encodeURIComponent(q)} };
+const mapUrl = q => (MAPS[mapSvc]||MAPS.naver).url(q);
 const rowMask = r => r[N_GID]>=0 ? GMASK[r[N_GID]] : (1<<r[N_DS]);
 // 교집합 모드에서 한 가게를 한 줄로 접을 때 쓰는 키(묶이지 않은 행은 행 자신이 곧 가게)
 const storeKey = r => r[N_GID]>=0 ? r[N_GID] : r;
@@ -380,7 +392,7 @@ $('#footNote').innerHTML = `
  구 단위로 좁히려면 검색창에 <code>분당구</code>를 넣으세요(주소까지 검색합니다).<br>
  ℹ️ 원본의 <code>전남광주통합특별시</code>는 시군구 기준으로 광주광역시/전라남도로 되분리했습니다(시도 필터 정합).
  안심식당 원본은 대표자 실명을 포함하지만 <b>개인정보라 수집하지 않았습니다</b>.
- 주소 클릭 → 카카오맵, 전화 클릭 → 전화 걸기.`;
+ 주소를 누르면 선택한 지도(기본 <b>네이버지도</b>, 카카오맵으로 바꿀 수 있습니다)에서 열리고, 전화번호를 누르면 전화가 걸립니다.`;
 
 /* 필터 옵션 */
 let SM = 0, POOL = [];                       // SM=선택 인증 비트마스크, POOL=R 의 인덱스 배열
@@ -508,7 +520,7 @@ function render(){
       <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
       <td class="c-src" data-label="분류">${esc(SRC[r[N_SRC]])||'-'}</td>
       <td class="detail" data-label="메뉴">${r[N_DET]?`<span class="clip" title="${esc(r[N_DET])}">${esc(r[N_DET])}</span>`:'<span style="color:var(--muted)">-</span>'}</td>
-      <td class="addr" data-label="주소"><a href="https://map.kakao.com/link/search/${encodeURIComponent(r[N_ADDR])}" target="_blank" rel="noopener" title="${esc(r[N_ADDR])}">${esc(shortAddr(r))}</a></td>
+      <td class="addr" data-label="주소"><a href="${esc(mapUrl(r[N_ADDR]))}" target="_blank" rel="noopener" title="${esc(r[N_ADDR])} — ${esc((MAPS[mapSvc]||MAPS.naver).name)}에서 열기">${esc(shortAddr(r))}</a></td>
       <td class="c-tel" data-label="전화">${tel}</td>
       <td class="c-date" data-label="지정일">${esc(r[N_DATE])||'-'}</td></tr>`;
   }).join('');
@@ -579,6 +591,11 @@ $('#fCat').addEventListener('click',e=>{
 $('#fFood').addEventListener('change',()=>{ reflow(); });
 let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>apply(),180);});
 $('#fSort').addEventListener('change',e=>{sortKey=e.target.value;sortDir=1;apply();});
+$('#fMap').addEventListener('change',e=>{
+  mapSvc=e.target.value;
+  try{ localStorage.setItem(MAP_LS,mapSvc); }catch(err){}
+  render();                       // 링크만 바뀌므로 다시 거를 필요는 없다
+});
 $('#bCsv').addEventListener('click',toCsv);
 
 /* 내 목록 */
@@ -753,6 +770,7 @@ $('#pvTbl').addEventListener('click',e=>{
   refreshOpts(); apply(); window.scrollTo({top:0,behavior:'smooth'});
 });
 
+$('#fMap').value=mapSvc;
 syncFavUi(); reflow(); $('#fQ').focus();
 </script>
 </body>
