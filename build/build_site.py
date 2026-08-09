@@ -57,6 +57,17 @@ def csv_rows(raw, encodings=("utf-8-sig", "cp949")):
 
 g = lambda r, k: (r.get(k) or "").strip()
 
+
+def env_key(name):
+    """시크릿 값에서 BOM·공백·따옴표를 걷어낸다.
+
+    ★2026-08-09 실사고: PowerShell 파이프로 `gh secret set` 하면 값 앞에 U+FEFF 가 붙는다.
+      그대로 URL 에 넣으면 urllib 이 'ascii codec can't encode \\ufeff' 로 죽는다.
+      str.strip() 은 U+FEFF 를 공백으로 보지 않아 걸러지지 않는다 — 명시적으로 지운다.
+    """
+    v = os.environ.get(name, "")
+    return v.replace("﻿", "").strip().strip('"').strip("'")
+
 # ── 정규화 규칙 (로컬 검증본과 동일) ───────────────────────────────────
 SIDO_FULL = {
     "서울": "서울특별시", "서울시": "서울특별시", "부산": "부산광역시", "대구": "대구광역시",
@@ -174,7 +185,7 @@ for r in ch:
 
 # ── ③ 백년가게 — 2025 API 명단 + 2022 파일본에서 업종·연락처 이식 ──────
 print("③ 백년가게 수집")
-ODK = os.environ.get("ODCLOUD_KEY", "").strip()
+ODK = env_key("ODCLOUD_KEY")
 if not ODK:
     raise RuntimeError("ODCLOUD_KEY 시크릿이 없다 (data.go.kr 일반 인증키)")
 uddi = "uddi:82fc1cc1-f636-46fc-ae0d-b1f2da5052b4"
@@ -235,7 +246,7 @@ print("   2022 이식 %s건 (%.1f%%)" % (format(by_matched, ","), by_matched * 1
 
 # ── ④ 안심식당 — MAFRA OpenAPI 전량 페이징 ────────────────────────────
 print("④ 안심식당 수집")
-MFK = os.environ.get("MAFRA_KEY", "").strip()
+MFK = env_key("MAFRA_KEY")
 if not MFK:
     raise RuntimeError("MAFRA_KEY 시크릿이 없다 (data.mafra.go.kr 인증키)")
 SVC = "Grid_20200713000000000605_1"
