@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>맛집 인증 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#fff; --ink:#1a1d21; --muted:#6b7280; --line:#e3e6ea;
+  --accent:#1f6feb; --accent-soft:#e8f0fe; --chip:#f0f2f5; --hover:#f7f9fc;
+  --d1:#1f6feb; --d2:#0f9d58; --d3:#b8860b; --d4:#c2410c;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#272d36;
+         --accent:#4b93ff; --accent-soft:#16273f; --chip:#1e242c; --hover:#1c222a;
+         --d1:#4b93ff; --d2:#3ddc84; --d3:#e0b950; --d4:#ff8a4c;
+         --shadow:0 1px 3px rgba(0,0,0,.4); }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:14px/1.55 -apple-system,BlinkMacSystemFont,"Malgun Gothic","맑은 고딕",
+     "Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
+.wrap{max-width:1420px;margin:0 auto;padding:20px 18px 60px}
+header h1{margin:0 0 6px;font-size:21px;letter-spacing:-.3px}
+.sub{color:var(--muted);font-size:12.5px;margin-bottom:14px}
+.sub b{color:var(--ink)}
+.dsbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.ds{flex:1;min-width:190px;border:1px solid var(--line);background:var(--panel);border-radius:10px;
+    padding:9px 12px;cursor:pointer;box-shadow:var(--shadow)}
+.ds:hover{background:var(--hover)}
+.ds.on{border-color:var(--accent);background:var(--accent-soft)}
+.ds .t{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:6px}
+.ds .n{font-size:12px;color:var(--muted);margin-top:2px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:8px 15px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
+     border-radius:999px;cursor:pointer;font-size:13px;font-weight:600}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+      box-shadow:var(--shadow);padding:14px;margin-bottom:14px}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+.filters .wide{grid-column:span 2}
+.f label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:4px;font-weight:600}
+select,input[type=search]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+     background:var(--bg);color:var(--ink);font-size:13.5px;font-family:inherit}
+select:focus,input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;
+     padding-top:12px;border-top:1px dashed var(--line)}
+.count{font-size:13.5px}.count b{font-size:17px;color:var(--accent)}
+.spacer{flex:1}
+label.chk{display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;
+     padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-weight:600}
+button.act{padding:7px 13px;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+     border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit}
+button.act:hover{background:var(--hover)}
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:1080px}
+th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--chip);font-size:12px;color:var(--muted);position:sticky;top:0;
+   cursor:pointer;user-select:none;white-space:nowrap;z-index:2}
+th:hover{color:var(--accent)}
+tbody tr:hover{background:var(--hover)}
+td.name{font-weight:600;white-space:nowrap}
+td.addr{color:var(--muted);font-size:12.5px;min-width:210px}
+td.detail{font-size:12.5px;max-width:270px}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--chip);
+      font-size:11.5px;color:var(--muted);white-space:nowrap}
+.badge{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11.5px;
+       font-weight:700;white-space:nowrap;color:#fff;margin:1px 2px 1px 0}
+.badge.dim{opacity:.34}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.segb{padding:7px 14px;border:0;background:var(--panel);color:var(--muted);cursor:pointer;
+      font-size:12.5px;font-weight:700;font-family:inherit}
+.segb + .segb{border-left:1px solid var(--line)}
+.segb.on{background:var(--accent);color:#fff}
+.segb .sm{font-weight:500;opacity:.75;font-size:11px}
+.pager{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
+.pager button{min-width:34px;padding:6px 9px;border:1px solid var(--line);background:var(--panel);
+      color:var(--ink);border-radius:7px;cursor:pointer;font-size:12.5px;font-family:inherit}
+.pager button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.pager button:disabled{opacity:.35;cursor:default}
+.empty{padding:44px 16px;text-align:center;color:var(--muted)}
+#pvTbl{min-width:860px;font-size:12.5px}
+#pvTbl td.n{text-align:right;font-variant-numeric:tabular-nums;cursor:pointer}
+#pvTbl td.n:hover{background:var(--accent-soft);color:var(--accent);font-weight:700}
+#pvTbl td.z{text-align:right;color:var(--line)}
+#pvTbl th.rowh,#pvTbl td.rowh{text-align:left;font-weight:600;white-space:nowrap;background:var(--chip)}
+#pvTbl tr.tot td,#pvTbl tr.tot th{font-weight:700;background:var(--chip)}
+.note{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.8}
+.note code{background:var(--chip);padding:1px 5px;border-radius:4px;font-size:11.5px}
+.note b{color:var(--ink)}
+.hide{display:none}
+:where(a,button,select,input,.ds,.tab,.segb):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── 좁은 화면(폰): 9열 표를 카드 리스트로 리플로우 ─────────────────────
+   데이터·렌더 경로는 그대로 두고 표시만 바꾼다. td::before 가 헤더 역할을 대신한다. */
+@media (max-width:760px){
+  .wrap{padding:14px 12px 44px}
+  header h1{font-size:19px}
+  .dsbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .ds{min-width:0;padding:8px 10px}
+  .ds .t{font-size:12.5px;gap:5px}
+  .ds .n{font-size:11px;line-height:1.35}
+  .seg{width:100%}
+  .segb{flex:1;padding:11px 8px;line-height:1.25}
+  .segb .sm{display:block}
+  .filters{grid-template-columns:1fr 1fr}
+  .filters .wide{grid-column:1 / -1}
+  select,input[type=search]{padding:11px 10px;font-size:16px}   /* 16px = iOS 자동확대 방지 */
+  .bar{gap:8px}
+  .bar .f{flex:1;min-width:0}
+  button.act,label.chk{padding:11px 12px}
+
+  .tblwrap{border:0;background:transparent;overflow:visible;border-radius:0}
+  table{display:block;width:100%;min-width:0}
+  thead{display:none}
+  tbody{display:block}
+  tbody tr{display:block;background:var(--panel);border:1px solid var(--line);
+           border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow)}
+  tbody tr:hover{background:var(--panel)}
+  tbody td{display:flex;gap:10px;align-items:baseline;border:0;padding:3px 0;font-size:13px}
+  tbody td::before{content:attr(data-label);flex:none;width:52px;color:var(--muted);
+                   font-size:11px;font-weight:700;letter-spacing:.02em}
+  td.name{display:block;font-size:16.5px;font-weight:700;padding:0 0 6px;white-space:normal}
+  td.cert{display:block;padding-bottom:8px}
+  td.detail,td.addr{max-width:none;min-width:0}
+  td.addr a{word-break:break-all}
+  .pager{gap:5px}
+  .pager button{min-width:40px;padding:9px 10px}
+  #pvTbl{min-width:640px}
+  .note{line-height:1.75}
+}
+@media (max-width:340px){
+  .dsbar{grid-template-columns:1fr}
+  .filters{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>🍚 맛집 인증 통합 조회</h1>
+  <div class="sub">공공데이터 <b id="hDs">4</b>종 통합 <b id="hTotal">0</b>건 · 카드를 눌러 출처를 켜고 끕니다</div>
+</header>
+
+<div class="dsbar" id="dsBar"></div>
+<div class="card" style="padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <span style="font-size:12px;color:var(--muted);font-weight:700">선택한 인증을</span>
+  <div class="seg">
+    <button class="segb on" data-mode="or">하나라도 받은 곳 <span class="sm">합집합</span></button>
+    <button class="segb" data-mode="and">모두 받은 곳 <span class="sm">교집합</span></button>
+  </div>
+  <span id="modeHint" style="font-size:12px;color:var(--muted)"></span>
+</div>
+
+<div class="tabs">
+  <div class="tab on" data-view="list">📋 목록 조회</div>
+  <div class="tab" data-view="pivot">📊 지역 × 유형 요약</div>
+</div>
+
+<div id="list">
+  <div class="card">
+    <div class="filters">
+      <div class="f"><label>시도</label><select id="fSido"></select></div>
+      <div class="f"><label>시군구</label><select id="fSgg"></select></div>
+      <div class="f"><label>음식 대분류</label><select id="fCat"></select></div>
+      <div class="f"><label>원본 분류</label><select id="fSrc"></select></div>
+      <div class="f wide">
+        <label>검색 (업소명 · 주소 · 메뉴/음식)</label>
+        <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000" autocomplete="off">
+      </div>
+    </div>
+    <div class="bar">
+      <div class="count"><b id="cNum">0</b><span id="cUnit">건</span><span id="cOf" style="color:var(--muted)"></span></div>
+      <div class="spacer"></div>
+      <label class="chk"><input type="checkbox" id="fFood" checked> 요식업만</label>
+      <div class="f" style="min-width:165px">
+        <select id="fSort">
+          <option value="name">정렬: 업소명순</option>
+          <option value="region">정렬: 지역순</option>
+          <option value="ds">정렬: 출처순</option>
+          <option value="new">정렬: 지정일 최신순</option>
+        </select>
+      </div>
+      <button class="act" id="bCsv">⬇ 결과 CSV</button>
+      <button class="act" id="bReset">↺ 초기화</button>
+    </div>
+  </div>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr>
+        <th data-s="name">업소명</th>
+        <th data-s="ds">인증</th>
+        <th data-s="region">지역</th>
+        <th data-s="cat">대분류</th>
+        <th data-s="src">원본분류</th>
+        <th data-s="detail">메뉴 · 주요음식</th>
+        <th>주소</th>
+        <th data-s="tel">전화</th>
+        <th data-s="date">지정일</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+    <div class="empty hide" id="noRes">조건에 맞는 업소가 없습니다.</div>
+  </div>
+  <div class="pager" id="pg"></div>
+</div>
+
+<div id="pivot" class="hide">
+  <div class="card"><div class="sub" style="margin:0">숫자를 클릭하면 그 조건으로 <b>목록 조회</b>가 열립니다. 위의 출처 카드·요식업 필터가 함께 반영됩니다.</div></div>
+  <div class="tblwrap"><table id="pvTbl"></table></div>
+</div>
+
+<div class="note" id="footNote"></div>
+
+<div class="note" id="srcNote" style="border-top:1px solid var(--line);padding-top:12px">
+  <b>데이터 출처</b> — 모두 공공데이터로, <b>이용허락범위 제한 없음</b>으로 개방된 자료입니다.
+  <ul style="margin:6px 0 0;padding-left:18px;line-height:1.9">
+    <li><b>모범음식점</b> · 행정안전부 전국모범음식점표준데이터 (LOCALDATA) — 2026-08-05 기준</li>
+    <li><b>착한가격업소</b> · 행정안전부 착한가격업소 현황 — 2026-06-30 기준</li>
+    <li><b>백년가게</b> · 소상공인시장진흥공단 전국 백년가게 지정리스트 — 2025-07-24 기준
+        (업종·연락처는 2022-07-13 파일본에서 이식)</li>
+    <li><b>안심식당</b> · 농림축산식품부 안심식당 정보 — 2026-02-21 기준</li>
+  </ul>
+  <p style="margin:8px 0 0">
+    ⚖️ <b>비공식 도구입니다.</b> 각 인증기관·정부기관과 무관하며, 원본을 가공해 한 화면에서 보기 쉽게 만든 것뿐입니다.
+    지정 현황은 수시로 바뀌므로 <b>실제 방문 전에는 해당 지자체·업소에 확인</b>하세요.
+    대분류는 추정값이고, 업소 대표자 등 <b>개인정보는 수집하지 않았습니다</b>.
+  </p>
+</div>
+</div>
+
+<script>
+// 이 파일이 헤더 없이 다른 껍데기 안에 실릴 수도 있다(아티팩트 발행 등).
+// viewport 메타가 없으면 폰 브라우저가 980px 가상 화면을 써서 반응형 규칙이 통째로 안 먹는다.
+if (!document.querySelector('meta[name="viewport"]')) {
+  const mv = document.createElement('meta');
+  mv.name = 'viewport'; mv.content = 'width=device-width, initial-scale=1';
+  (document.head || document.documentElement).appendChild(mv);
+}
+
+const D = /*__DATA__*/;
+const SIDO=D.sido, SGG=D.sgg, DS=D.ds, CAT=D.cat, SRC=D.src, R=D.rows;
+const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10;
+const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)'];
+const GMASK=D.gmask;
+let cur=[], page=1, sortKey='name', sortDir=1, dsOn=new Set(DS), mode='or';
+
+// 같은 가게로 묶인 그룹이 가진 인증 비트마스크. 묶이지 않은 행은 자기 출처 하나뿐.
+const rowMask = r => r[N_GID]>=0 ? GMASK[r[N_GID]] : (1<<r[N_DS]);
+// 교집합 모드에서 한 가게를 한 줄로 접을 때 쓰는 키(묶이지 않은 행은 행 자신이 곧 가게)
+const storeKey = r => r[N_GID]>=0 ? r[N_GID] : r;
+const selMask = () => [...dsOn].reduce((m,d)=> m|(1<<DS.indexOf(d)), 0);
+// 6만 행이 넘어가면 매 키 입력마다 문자열을 다시 만드는 비용이 눈에 띈다 → 1회만 만들어 둔다.
+const SEARCH = R.map(r => (r[N_NAME]+' '+r[N_DET]+' '+r[N_ADDR]+' '+SRC[r[N_SRC]]).toLowerCase());
+
+const $=s=>document.querySelector(s);
+const nf=n=>n.toLocaleString('ko-KR');
+const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+$('#hTotal').textContent = nf(D.total);
+$('#hDs').textContent = DS.length;
+
+/* 출처 카드 */
+$('#dsBar').innerHTML = DS.map((d,i)=>{
+  const m=D.meta[d]||{};
+  return `<div class="ds on" data-ds="${esc(d)}">
+    <div class="t"><span class="dot" style="background:${DCOL[i%3]}"></span>${esc(d)}</div>
+    <div class="n">${nf(m.n||0)}개소 · ${esc(m.date||'')} 기준 · ${esc(m.org||'')}</div>
+    <div class="n" style="opacity:.85">${esc(m.note||'')}</div></div>`;
+}).join('');
+
+$('#footNote').innerHTML = `
+ ⚠️ <b>대분류의 신뢰도는 출처마다 다릅니다.</b>
+ <b>안심식당</b>(음식종류 6종)·<b>착한가격업소</b>(업종 11종)는 원본이 열거형이라 <b>추측 없이 그대로 매핑</b>했지만,
+ <b>모범음식점</b>(음식의유형 233종)·<b>백년가게</b>(주요사업 782종)는 자유입력이라 키워드 규칙으로 <b>추정</b>했습니다.
+ 정확한 값은 언제나 <b>원본분류</b> 열을 보세요.<br>
+ ⚠️ <b>네 데이터는 서로 다른 제도</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생.
+ 같은 가게가 둘 이상에 중복 등재될 수 있고, <b>중복 제거는 하지 않았습니다</b>(주소 표기가 달라 안전하게 합칠 수 없음).<br>
+ ⚠️ 각 출처는 <b>지정 취소·폐업분을 걸러낸 유효분만</b> 담았습니다 —
+ 모범음식점 65,426→11,455 · 안심식당 67,740→42,630.<br>
+ ⚠️ <b>백년가게의 업종·연락처는 2022년 파일본에서 이식</b>한 값입니다(명단은 2025년판).
+ 이식이 안 된 340건은 원본분류가 <code>(미상)</code>입니다.<br>
+ ℹ️ <b>시군구는 시/군 레벨로 통일</b>했습니다 — 원본이 <code>성남시 분당구</code>처럼 구까지 적는 출처와
+ <code>성남시</code>까지만 적는 출처가 섞여 있어 그대로 두면 교차 조회가 갈라집니다.
+ 구 단위로 좁히려면 검색창에 <code>분당구</code>를 넣으세요(주소까지 검색합니다).<br>
+ ℹ️ 원본의 <code>전남광주통합특별시</code>는 시군구 기준으로 광주광역시/전라남도로 되분리했습니다(시도 필터 정합).
+ 안심식당 원본은 대표자 실명을 포함하지만 <b>개인정보라 수집하지 않았습니다</b>.
+ 주소 클릭 → 카카오맵, 전화 클릭 → 전화 걸기.`;
+
+/* 필터 옵션 */
+let SM = 0, POOL = [];                       // SM=선택 인증 비트마스크, POOL=R 의 인덱스 배열
+const foodOk = r => !$('#fFood').checked || CAT[r[N_CAT]]!=='비요식';
+const inDs = r => mode==='and' ? ((rowMask(r)&SM)===SM) : dsOn.has(DS[r[N_DS]]);
+// 교집합에서 한 가게를 대표할 행 고르기 — 선택한 인증의 행을 우선하고, 정보가 많은 쪽을 택한다
+const score = r => (dsOn.has(DS[r[N_DS]])?4:0) + (r[N_DET]?2:0) + (r[N_TEL]?1:0);
+
+function refreshPool(){
+  SM = selMask();
+  if (mode!=='and'){
+    POOL = [];
+    for (let i=0;i<R.length;i++) if (inDs(R[i]) && foodOk(R[i])) POOL.push(i);
+  } else {
+    const best = new Map();                  // storeKey → R 인덱스
+    for (let i=0;i<R.length;i++){
+      const r=R[i]; if (!inDs(r) || !foodOk(r)) continue;
+      const k=storeKey(r), c=best.get(k);
+      if (c===undefined || score(r)>score(R[c])) best.set(k,i);
+    }
+    POOL = [...best.values()];
+  }
+  const n = dsOn.size;
+  $('#modeHint').textContent = mode==='and'
+    ? (n>1 ? `${n}개 인증을 모두 받은 곳만 · 한 가게를 한 줄로 표시` : '인증 1개만 선택돼 있어 합집합과 같습니다')
+    : '선택한 인증 중 하나라도 있으면 표시(같은 가게가 인증마다 여러 줄)';
+}
+
+function fill(sel, items, all){
+  const keep=sel.value;
+  sel.innerHTML='<option value="">'+all+'</option>'+
+    items.map(([v,c])=>`<option value="${esc(v)}">${esc(v)} (${nf(c)})</option>`).join('');
+  if([...sel.options].some(o=>o.value===keep)) sel.value=keep;
+}
+function tally(key, extra){
+  const m=new Map();
+  for(const i of POOL){ const r=R[i];
+    if(extra&&!extra(r)) continue;
+    const k=key(r); m.set(k,(m.get(k)||0)+1); }
+  return [...m.entries()].sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0],'ko'));
+}
+function refreshOpts(){
+  fill($('#fSido'), tally(r=>SIDO[r[N_SIDO]]), '시도 전체');
+  fill($('#fCat'),  tally(r=>CAT[r[N_CAT]]),   '대분류 전체');
+  fill($('#fSrc'),  tally(r=>SRC[r[N_SRC]]),   '원본분류 전체');
+  refreshSgg();
+}
+function refreshSgg(){
+  const sd=$('#fSido').value;
+  fill($('#fSgg'), sd? tally(r=>SGG[r[N_SGG]], r=>SIDO[r[N_SIDO]]===sd):[], '시군구 전체');
+  $('#fSgg').disabled=!sd;
+}
+
+/* 필터 · 정렬 */
+function apply(reset){
+  const sd=$('#fSido').value, sg=$('#fSgg').value, ct=$('#fCat').value,
+        sc=$('#fSrc').value, q=$('#fQ').value.trim().toLowerCase();
+  cur=[];
+  for(const i of POOL){ const r=R[i];
+    if((!sd||SIDO[r[N_SIDO]]===sd) && (!sg||SGG[r[N_SGG]]===sg) &&
+       (!ct||CAT[r[N_CAT]]===ct) && (!sc||SRC[r[N_SRC]]===sc) &&
+       (!q ||SEARCH[i].includes(q))) cur.push(r);
+  }
+  const K={ name:r=>r[N_NAME], region:r=>SIDO[r[N_SIDO]]+' '+SGG[r[N_SGG]]+' '+r[N_NAME],
+    ds:r=>DS[r[N_DS]]+' '+r[N_NAME], cat:r=>CAT[r[N_CAT]]+' '+r[N_NAME],
+    src:r=>SRC[r[N_SRC]]+' '+r[N_NAME], detail:r=>r[N_DET]+' '+r[N_NAME],
+    tel:r=>r[N_TEL], date:r=>r[N_DATE], new:r=>r[N_DATE] }[sortKey]||(r=>r[N_NAME]);
+  const dir = sortKey==='new' ? -1 : sortDir;
+  cur=cur.slice().sort((a,b)=>K(a).localeCompare(K(b),'ko')*dir);
+  if(reset!==false) page=1;
+  render();
+}
+
+function render(){
+  $('#cNum').textContent=nf(cur.length);
+  const unit = mode==='and' ? '곳' : '건';
+  $('#cUnit').textContent = unit;
+  $('#cOf').textContent = cur.length===POOL.length ? '' : ' / '+nf(POOL.length)+unit;
+  const maxP=Math.max(1,Math.ceil(cur.length/PER)); if(page>maxP) page=maxP;
+  const sl=cur.slice((page-1)*PER,page*PER);
+  $('#noRes').classList.toggle('hide',cur.length>0);
+  $('#tb').innerHTML=sl.map(r=>{
+    const m=rowMask(r);
+    // 그 가게가 가진 인증을 전부 보여준다. 합집합 모드에선 지금 줄의 출처만 진하게.
+    const badges=DS.map((d,k)=> (m>>k&1)
+      ? `<span class="badge${(mode==='and'||k===r[N_DS])?'':' dim'}" style="background:${DCOL[k]}">${esc(d)}</span>`
+      : '').join('');
+    const tel=r[N_TEL]?`<a href="tel:${esc(r[N_TEL].replace(/[^0-9+]/g,''))}">${esc(r[N_TEL])}</a>`
+                      :'<span style="color:var(--muted)">-</span>';
+    return `<tr>
+      <td class="name">${esc(r[N_NAME])}</td>
+      <td class="cert">${badges}</td>
+      <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}</td>
+      <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
+      <td class="c-src" data-label="분류">${esc(SRC[r[N_SRC]])||'-'}</td>
+      <td class="detail" data-label="메뉴">${esc(r[N_DET])||'<span style="color:var(--muted)">-</span>'}</td>
+      <td class="addr" data-label="주소"><a href="https://map.kakao.com/link/search/${encodeURIComponent(r[N_ADDR])}" target="_blank" rel="noopener">${esc(r[N_ADDR])}</a></td>
+      <td class="c-tel" data-label="전화">${tel}</td>
+      <td class="c-date" data-label="지정일">${esc(r[N_DATE])||'-'}</td></tr>`;
+  }).join('');
+  const btn=(l,p,on,dis)=>`<button ${dis?'disabled':''} data-p="${p}" class="${on?'on':''}">${l}</button>`;
+  let h=btn('‹ 이전',page-1,false,page<=1); const win=[];
+  for(let i=Math.max(1,page-2);i<=Math.min(maxP,page+2);i++) win.push(i);
+  if(win[0]>1){ h+=btn(1,1,page===1); if(win[0]>2) h+='<span style="color:var(--muted)">…</span>'; }
+  win.forEach(i=>h+=btn(i,i,i===page));
+  if(win[win.length-1]<maxP){ if(win[win.length-1]<maxP-1) h+='<span style="color:var(--muted)">…</span>';
+    h+=btn(maxP,maxP,page===maxP); }
+  h+=btn('다음 ›',page+1,false,page>=maxP)+`<span style="color:var(--muted);margin-left:8px">${nf(page)} / ${nf(maxP)} 쪽</span>`;
+  $('#pg').innerHTML=cur.length?h:'';
+}
+
+/* 피벗 */
+function buildPivot(){
+  const pool=POOL.map(i=>R[i]);
+  const cnt={},rowT={},colT={};
+  for(const r of pool){ const s=SIDO[r[N_SIDO]],c=CAT[r[N_CAT]];
+    (cnt[s]=cnt[s]||{})[c]=(cnt[s][c]||0)+1; rowT[s]=(rowT[s]||0)+1; colT[c]=(colT[c]||0)+1; }
+  const sidos=Object.keys(rowT).sort((a,b)=>rowT[b]-rowT[a]);
+  const cols=D.cats.filter(c=>colT[c]);
+  let h='<thead><tr><th class="rowh">시도</th>'+cols.map(c=>`<th style="text-align:right">${esc(c)}</th>`).join('')+
+        '<th style="text-align:right">합계</th></tr></thead><tbody>';
+  for(const s of sidos){
+    h+=`<tr><td class="rowh">${esc(s)}</td>`+cols.map(c=>{const n=(cnt[s]||{})[c]||0;
+      return n?`<td class="n" data-sido="${esc(s)}" data-cat="${esc(c)}">${nf(n)}</td>`:'<td class="z">·</td>';
+    }).join('')+`<td class="n" data-sido="${esc(s)}" data-cat="">${nf(rowT[s])}</td></tr>`;
+  }
+  h+='<tr class="tot"><th class="rowh">합계</th>'+cols.map(c=>`<td class="n" data-sido="" data-cat="${esc(c)}">${nf(colT[c])}</td>`).join('')+
+     `<td class="n" data-sido="" data-cat="">${nf(pool.length)}</td></tr></tbody>`;
+  $('#pvTbl').innerHTML=h;
+}
+
+function toCsv(){
+  const head=['인증','업소명','시도','시군구','대분류','원본분류','상세','주소','전화번호','지정일'];
+  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const certs=r=>DS.filter((d,k)=>(rowMask(r)>>k&1)).join(' · ');
+  const body=cur.map(r=>[certs(r),r[N_NAME],SIDO[r[N_SIDO]],SGG[r[N_SGG]],CAT[r[N_CAT]],
+                         SRC[r[N_SRC]],r[N_DET],r[N_ADDR],r[N_TEL],r[N_DATE]].map(q).join(','));
+  const b=new Blob(['﻿'+[head.map(q).join(','),...body].join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b);
+  a.download=`맛집인증_검색결과_${cur.length}건.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* 이벤트 */
+function reflow(){ refreshPool(); refreshOpts(); buildPivot(); apply(); }
+
+$('#dsBar').addEventListener('click',e=>{
+  const c=e.target.closest('.ds'); if(!c) return;
+  const d=c.dataset.ds;
+  if(dsOn.has(d)&&dsOn.size===1) return;          // 최소 1개 유지
+  dsOn.has(d)?dsOn.delete(d):dsOn.add(d);
+  c.classList.toggle('on',dsOn.has(d));
+  reflow();
+});
+document.querySelectorAll('.segb').forEach(b=> b.addEventListener('click',()=>{
+  if(b.classList.contains('on')) return;
+  document.querySelectorAll('.segb').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); mode=b.dataset.mode; reflow();
+}));
+$('#fSido').addEventListener('change',()=>{ $('#fSgg').value=''; refreshSgg(); apply(); });
+['#fSgg','#fCat','#fSrc'].forEach(s=>$(s).addEventListener('change',()=>apply()));
+$('#fFood').addEventListener('change',()=>{ reflow(); });
+let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>apply(),180);});
+$('#fSort').addEventListener('change',e=>{sortKey=e.target.value;sortDir=1;apply();});
+$('#bCsv').addEventListener('click',toCsv);
+$('#bReset').addEventListener('click',()=>{
+  ['#fSido','#fCat','#fSrc','#fQ'].forEach(s=>$(s).value='');
+  $('#fSort').value='name'; sortKey='name'; sortDir=1;
+  $('#fFood').checked=true;
+  // 인증 선택·모드까지 되돌린다(부분 초기화는 "왜 안 돌아오지"를 부른다)
+  dsOn=new Set(DS);
+  document.querySelectorAll('.ds').forEach(c=>c.classList.add('on'));
+  mode='or';
+  document.querySelectorAll('.segb').forEach(b=>b.classList.toggle('on', b.dataset.mode==='or'));
+  reflow();
+});
+document.querySelectorAll('th[data-s]').forEach(th=>th.addEventListener('click',()=>{
+  const k=th.dataset.s;
+  if(sortKey===k) sortDir*=-1; else {sortKey=k;sortDir=1;}
+  $('#fSort').value=['name','region','ds','new'].includes(k)?k:'';
+  apply(false);
+}));
+$('#pg').addEventListener('click',e=>{const b=e.target.closest('button');
+  if(!b||b.disabled)return; page=+b.dataset.p; render(); window.scrollTo({top:0,behavior:'smooth'});});
+document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  tb.classList.add('on');
+  $('#list').classList.toggle('hide',tb.dataset.view!=='list');
+  $('#pivot').classList.toggle('hide',tb.dataset.view!=='pivot');
+}));
+$('#pvTbl').addEventListener('click',e=>{
+  const td=e.target.closest('td.n'); if(!td) return;
+  $('#fSido').value=td.dataset.sido||''; $('#fSgg').value=''; refreshSgg();
+  $('#fCat').value=td.dataset.cat||''; $('#fSrc').value=''; $('#fQ').value='';
+  document.querySelector('.tab[data-view="list"]').click();
+  apply(); window.scrollTo({top:0,behavior:'smooth'});
+});
+
+reflow(); $('#fQ').focus();
+</script>
+</body>
+</html>

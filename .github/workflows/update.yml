@@ -1,0 +1,53 @@
+name: 데이터 주간 갱신
+
+on:
+  schedule:
+    # 토 19:00 UTC = 일요일 04:00 KST. 원본 갱신 주기가 '수시~분기'라 주 1회면 넉넉하다.
+    - cron: "0 19 * * 6"
+  workflow_dispatch:        # Actions 탭에서 수동 실행 가능
+
+# 동시에 두 번 돌아 서로의 커밋을 덮지 않게
+concurrency:
+  group: update-site
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write       # index.html 커밋용. 이 리포 안에서만 유효한 권한이라 PAT 불필요
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 사이트 빌드
+        env:
+          ODCLOUD_KEY: ${{ secrets.ODCLOUD_KEY }}   # data.go.kr 일반 인증키(백년가게)
+          MAFRA_KEY: ${{ secrets.MAFRA_KEY }}       # data.mafra.go.kr 인증키(안심식당)
+        run: python build/build_site.py
+        # ★빌드가 실패하면 여기서 멈춘다. index.html 은 손대지 않았으므로
+        #   사이트는 직전 정상본을 그대로 유지한다(부분 데이터 배포 방지).
+
+      - name: 변경분만 커밋
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "데이터 변화 없음 — 커밋 생략"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "chore: 데이터 갱신 $(TZ=Asia/Seoul date +%Y-%m-%d)"
+          git push
+
+      - name: 요약
+        if: always()
+        run: |
+          echo "### 갱신 결과" >> $GITHUB_STEP_SUMMARY
+          echo "- 상태: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 시각: $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')" >> $GITHUB_STEP_SUMMARY
