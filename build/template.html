@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>맛집 인증 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당</title>
+<title>맛집 인증 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사</title>
 <style>
 :root{
   --bg:#f6f7f9; --panel:#fff; --ink:#1a1d21; --muted:#6b7280; --line:#e3e6ea;
   --accent:#1f6feb; --accent-soft:#e8f0fe; --chip:#f0f2f5; --hover:#f7f9fc;
-  --d1:#1f6feb; --d2:#0f9d58; --d3:#b8860b; --d4:#c2410c;
+  --d1:#1f6feb; --d2:#0f9d58; --d3:#b8860b; --d4:#c2410c; --d5:#7c3aed;
   --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#272d36;
          --accent:#4b93ff; --accent-soft:#16273f; --chip:#1e242c; --hover:#1c222a;
-         --d1:#4b93ff; --d2:#3ddc84; --d3:#e0b950; --d4:#ff8a4c;
+         --d1:#4b93ff; --d2:#3ddc84; --d3:#e0b950; --d4:#ff8a4c; --d5:#a78bfa;
          --shadow:0 1px 3px rgba(0,0,0,.4); }
 }
 *{box-sizing:border-box}
@@ -79,6 +79,14 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .memo-edit{border:0;background:none;cursor:pointer;color:var(--muted);font-size:11.5px;
            padding:0 4px;font-family:inherit}
 .memo-edit:hover{color:var(--accent)}
+.paste{width:100%;min-height:150px;padding:10px;border:1px solid var(--line);border-radius:8px;
+       background:var(--bg);color:var(--ink);font:13.5px/1.6 inherit;resize:vertical}
+.paste:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.rslt{margin-top:10px;font-size:12.5px;line-height:1.85}
+.rslt b{color:var(--ink)}
+.rslt .miss{color:var(--muted)}
+.thumb{width:52px;height:52px;object-fit:cover;border-radius:7px;border:1px solid var(--line);
+       float:left;margin:1px 9px 2px 0;background:var(--chip)}
 button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .segb{padding:7px 14px;border:0;background:var(--panel);color:var(--muted);cursor:pointer;
@@ -195,12 +203,28 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
         </select>
       </div>
       <button class="act" id="bFav">☆ 내 목록 <span id="favN">0</span></button>
+      <button class="act" id="bPaste" title="상호를 붙여넣어 한꺼번에 담기">📋 이름으로 담기</button>
       <button class="act" id="bCsv">⬇ 결과 CSV</button>
       <button class="act" id="bFavOut" title="내 목록을 파일로 저장(다른 기기로 옮길 때)">⬆ 내보내기</button>
       <button class="act" id="bFavIn" title="저장해 둔 내 목록 불러오기">⬇ 불러오기</button>
       <input type="file" id="favFile" accept=".json" class="hide">
       <button class="act" id="bReset">↺ 초기화</button>
     </div>
+  </div>
+
+  <div class="card hide" id="pastePanel">
+    <div class="f">
+      <label>상호를 <b>한 줄에 하나씩</b> 붙여넣으세요.
+        같은 이름이 여러 곳이면 뒤에 지역을 적습니다 — 예: <code>하동관 중구</code></label>
+      <textarea class="paste" id="pasteBox" placeholder="을지면옥&#10;하동관 중구&#10;진주회관"></textarea>
+    </div>
+    <div class="bar">
+      <button class="act" id="bPasteRun">내 목록에 담기</button>
+      <button class="act" id="bPasteClose">닫기</button>
+      <div class="spacer"></div>
+      <span style="font-size:12px;color:var(--muted)">이 목록은 이 브라우저에만 저장됩니다</span>
+    </div>
+    <div class="rslt" id="pasteRslt"></div>
   </div>
 
   <div class="tblwrap">
@@ -238,6 +262,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
     <li><b>백년가게</b> · 소상공인시장진흥공단 전국 백년가게 지정리스트 — 2025-07-24 기준
         (업종·연락처는 2022-07-13 파일본에서 이식)</li>
     <li><b>안심식당</b> · 농림축산식품부 안심식당 정보 — 2026-02-21 기준</li>
+    <li><b>관광공사 맛집</b> · 한국관광공사 국문 관광정보(대한민국 구석구석) — 사진·대표메뉴·영업시간은 점진 수집 중</li>
   </ul>
   <p style="margin:8px 0 0">
     ⚖️ <b>비공식 도구입니다.</b> 각 인증기관·정부기관과 무관하며, 원본을 가공해 한 화면에서 보기 쉽게 만든 것뿐입니다.
@@ -258,8 +283,8 @@ if (!document.querySelector('meta[name="viewport"]')) {
 
 const D = /*__DATA__*/;
 const SIDO=D.sido, SGG=D.sgg, DS=D.ds, CAT=D.cat, SRC=D.src, R=D.rows;
-const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10;
-const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)'];
+const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10,N_IMG=11;
+const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)'];
 const GMASK=D.gmask;
 let cur=[], page=1, sortKey='name', sortDir=1, dsOn=new Set(DS), mode='or';
 
@@ -313,7 +338,7 @@ $('#footNote').innerHTML = `
  <b>안심식당</b>(음식종류 6종)·<b>착한가격업소</b>(업종 11종)는 원본이 열거형이라 <b>추측 없이 그대로 매핑</b>했지만,
  <b>모범음식점</b>(음식의유형 233종)·<b>백년가게</b>(주요사업 782종)는 자유입력이라 키워드 규칙으로 <b>추정</b>했습니다.
  정확한 값은 언제나 <b>원본분류</b> 열을 보세요.<br>
- ⚠️ <b>네 데이터는 서로 다른 제도</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생.
+ ⚠️ <b>다섯 데이터는 서로 다른 제도</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생, 관광공사=관광 콘텐츠 선정.
  같은 가게가 둘 이상에 중복 등재될 수 있고, <b>중복 제거는 하지 않았습니다</b>(주소 표기가 달라 안전하게 합칠 수 없음).<br>
  ⚠️ 각 출처는 <b>지정 취소·폐업분을 걸러낸 유효분만</b> 담았습니다 —
  모범음식점 65,426→11,455 · 안심식당 67,740→42,630.<br>
@@ -418,7 +443,7 @@ function render(){
                       :'<span style="color:var(--muted)">-</span>';
     const fk = favKey(r), fv = favs[fk];
     return `<tr>
-      <td class="name"><button class="fav${fv?' on':''}" data-k="${esc(fk)}" title="내 목록에 담기">${fv?'★':'☆'}</button>${esc(r[N_NAME])}${
+      <td class="name">${r[N_IMG]?`<img class="thumb" src="${esc(r[N_IMG])}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}<button class="fav${fv?' on':''}" data-k="${esc(fk)}" title="내 목록에 담기">${fv?'★':'☆'}</button>${esc(r[N_NAME])}${
         fv ? `<button class="memo-edit" data-k="${esc(fk)}">${fv.m?'✎ 메모':'✎ 메모 달기'}</button>` : ''}${
         fv && fv.m ? `<div class="memo">${esc(fv.m)}</div>` : ''}</td>
       <td class="cert">${badges}</td>
@@ -547,6 +572,74 @@ $('#bFavOut').addEventListener('click',()=>{
   a.href=URL.createObjectURL(b); a.download=`내목록_${n}곳.json`; a.click();
   URL.revokeObjectURL(a.href);
 });
+/* ── 이름으로 일괄 담기 ───────────────────────────────────────────────
+   사용자가 직접 상호를 넣으면 81,655건에서 찾아 내 목록에 담는다.
+   동명이점이 흔해서(김밥천국·진미식당…) 지역 힌트가 없고 후보가 많으면
+   담지 않고 '모호'로 돌려준다 — 엉뚱한 가게가 조용히 담기는 것보다 낫다. */
+const normNm = s => (s||'').replace(/[^0-9A-Za-z가-힣]/g,'').toLowerCase();
+let NAME_IDX = null;
+function nameIndex(){
+  if (NAME_IDX) return NAME_IDX;
+  NAME_IDX = new Map();
+  for (let i=0;i<R.length;i++){
+    const k = normNm(R[i][N_NAME]);
+    if (!k) continue;
+    let a = NAME_IDX.get(k);
+    if (!a) { a=[]; NAME_IDX.set(k,a); }
+    a.push(i);
+  }
+  return NAME_IDX;
+}
+const AMBIG = 12;                      // 지역 힌트 없이 이보다 많이 걸리면 모호로 본다
+
+function pasteRun(){
+  const lines = $('#pasteBox').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if (!lines.length){ $('#pasteRslt').innerHTML='<span class="miss">붙여넣은 이름이 없습니다.</span>'; return; }
+  const idx = nameIndex();
+  let added=0; const miss=[], ambig=[];
+  const before = Object.keys(favs).length;
+
+  for (const line of lines){
+    // 끝 토큰이 시/군/구/도로 끝나면 지역 힌트로 떼어낸다
+    let tok = line.split(/[\s,·]+/).filter(Boolean), region='';
+    if (tok.length>1 && /(시|군|구|도)$/.test(tok[tok.length-1])) region = tok.pop();
+    const name = tok.join(' ');
+    const nk = normNm(name);
+    if (!nk){ miss.push(line); continue; }
+
+    const inRegion = i => !region ||
+      (SIDO[R[i][N_SIDO]] + SGG[R[i][N_SGG]] + R[i][N_ADDR]).includes(region);
+    let hits = (idx.get(nk)||[]).filter(inRegion);
+
+    if (!hits.length && nk.length>=3){        // 정확일치가 없으면 부분일치로 한 번 더
+      for (const [k,v] of idx){
+        if (k.includes(nk)){ hits = hits.concat(v.filter(inRegion)); if (hits.length>AMBIG*3) break; }
+      }
+    }
+    if (!hits.length){ miss.push(line); continue; }
+    if (hits.length>AMBIG && !region){ ambig.push(line+' ('+hits.length+'곳)'); continue; }
+
+    for (const i of hits){
+      const k = favKey(R[i]);
+      if (!favs[k]){ favs[k]={t:Date.now(),m:''}; added++; }
+    }
+  }
+  saveFavs(); syncFavUi(); apply();
+
+  const box=[];
+  box.push(`<b>${nf(lines.length)}줄</b> 중 <b style="color:var(--accent)">${nf(added)}곳</b>을 새로 담았습니다`
+           + ` (내 목록 ${nf(before)} → ${nf(Object.keys(favs).length)}곳)`);
+  if (ambig.length) box.push(`<span class="miss">⚠️ 같은 이름이 너무 많아 건너뜀 ${ambig.length}건 — 뒤에 지역을 적어 주세요:</span><br>${esc(ambig.join(' · '))}`);
+  if (miss.length)  box.push(`<span class="miss">🔍 못 찾음 ${miss.length}건:</span><br>${esc(miss.join(' · '))}`);
+  $('#pasteRslt').innerHTML = box.join('<br><br>');
+}
+$('#bPaste').addEventListener('click',()=>{
+  $('#pastePanel').classList.toggle('hide');
+  if(!$('#pastePanel').classList.contains('hide')) $('#pasteBox').focus();
+});
+$('#bPasteClose').addEventListener('click',()=>$('#pastePanel').classList.add('hide'));
+$('#bPasteRun').addEventListener('click',pasteRun);
+
 $('#bFavIn').addEventListener('click',()=>$('#favFile').click());
 $('#favFile').addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return;

@@ -35,13 +35,14 @@ jobs:
 
       - name: 변경분만 커밋
         run: |
-          if git diff --quiet -- index.html; then
+          # ★tour_cache.json 도 함께 — 안 하면 관광공사 상세 점진 수집이 매주 처음부터 시작한다
+          if git diff --quiet -- index.html build/tour_cache.json; then
             echo "데이터 변화 없음 — 커밋 생략"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html
+          git add index.html build/tour_cache.json
           git commit -m "chore: 데이터 갱신 $(TZ=Asia/Seoul date +%Y-%m-%d)"
           git push
 

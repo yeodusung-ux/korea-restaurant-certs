@@ -21,7 +21,8 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/125.0 Safari/537.36")
 
 # 소스별 최소 기대 건수(실측의 절반 수준) — 미달이면 수집이 깨진 것으로 본다
-MIN_ROWS = {"모범음식점": 5000, "착한가격업소": 5000, "백년가게": 500, "안심식당": 20000}
+MIN_ROWS = {"모범음식점": 5000, "착한가격업소": 5000, "백년가게": 500,
+            "안심식당": 20000, "관광공사 맛집": 5000}
 
 
 def fetch(url, referer=None, retries=5, timeout=180):
@@ -149,7 +150,143 @@ def classify(*parts):
     return "기타"
 
 
+ODK = env_key("ODCLOUD_KEY")      # data.go.kr 계정 키 — 백년가게·관광공사가 함께 쓴다
+if not ODK:
+    raise RuntimeError("ODCLOUD_KEY 시크릿이 없다 (data.go.kr 일반 인증키)")
+
 recs = []
+
+# ── ⑤ 관광공사 맛집 (TourAPI) ─────────────────────────────────────────
+# 「대한민국 구석구석」 편집 선정 음식점. data.go.kr 계정 키를 그대로 쓴다(활용신청만 별도).
+#
+# ★한도 설계 — 개발계정은 **하루 1,000콜**이다.
+#   목록(areaBasedList2)은 1,000건씩 받아 14콜이면 전량이라 매주 통째로 갱신한다.
+#   반면 대표메뉴·영업시간(detailIntro2)은 **종목당 1콜**이라 13,521콜 = 한도의 13배다.
+#   → 매 실행 TOUR_DETAIL 건씩만 받아 캐시에 쌓는다(주 1회면 약 14주에 완성).
+#     채워진 것부터 화면에 나오고, 캐시는 리포에 커밋돼 다음 주에 이어받는다.
+print("⑤ 관광공사 맛집 수집")
+TOUR = "https://apis.data.go.kr/B551011/KorService2"
+# 상세 채움 건수. 주간 사이트 빌드는 0(캐시만 사용), 일일 캐시잡이 TOUR_DETAIL 을 준다.
+TOUR_DETAIL = int(os.environ.get("TOUR_DETAIL", "0"))
+CACHE_ONLY = bool(os.environ.get("CACHE_ONLY"))
+CACHE_P = os.path.join(HERE, "tour_cache.json")
+
+# 분류 코드 → 이름 (lclsSystmCode2 로 받은 정본, 21종. 추측 없음)
+LCLS = {
+    "FD010100": "관광식당", "FD010200": "모범음식점",
+    "FD020100": "중식", "FD020200": "일식", "FD020300": "서양식",
+    "FD020400": "기타외국식", "FD020500": "퓨전음식",
+    "FD030100": "제과", "FD030200": "피자, 햄버거, 샌드위치 및 유사음식",
+    "FD030300": "치킨", "FD030400": "김밥 분식", "FD030500": "이동음식",
+    "FD030600": "기타간이음식",
+    "FD040100": "바/펍", "FD040200": "생맥주전문점", "FD040300": "클럽",
+    "FD040400": "전통주/민속주점", "FD040500": "기타주점",
+    "FD050100": "카페", "FD050200": "찻집", "FD050300": "기타음료점",
+}
+# 코드가 열거형이라 대분류도 추측 없이 직접 매핑한다
+LCLS_CAT = {
+    "FD010100": "한식", "FD010200": "한식",
+    "FD020100": "중식", "FD020200": "일식·회", "FD020300": "양식",
+    "FD020400": "기타", "FD020500": "기타",
+    "FD030100": "카페·제과", "FD030200": "양식", "FD030300": "기타",
+    "FD030400": "면·분식", "FD030500": "기타", "FD030600": "기타",
+    "FD040100": "기타", "FD040200": "기타", "FD040300": "비요식",
+    "FD040400": "기타", "FD040500": "기타",
+    "FD050100": "카페·제과", "FD050200": "카페·제과", "FD050300": "카페·제과",
+}
+
+
+def tour(path, **kw):
+    q = "&".join("%s=%s" % (k, v) for k, v in kw.items())
+    u = ("%s/%s?serviceKey=%s&MobileOS=ETC&MobileApp=certs&_type=json&%s"
+         % (TOUR, path, ODK, q))
+    return json.loads(fetch(u).decode("utf-8"))["response"]
+
+
+tour_items, page = [], 1
+while True:
+    b = tour("areaBasedList2", numOfRows=1000, pageNo=page,
+             contentTypeId=39, arrange="A")["body"]
+    got = (b.get("items") or {}).get("item") or []
+    if isinstance(got, dict):
+        got = [got]
+    tour_items.extend(got)
+    if len(tour_items) >= int(b["totalCount"]) or not got:
+        break
+    page += 1
+print("   목록 %s건 (%d콜)" % (format(len(tour_items), ","), page))
+
+cache = {}
+if os.path.exists(CACHE_P):
+    try:
+        cache = json.load(io.open(CACHE_P, encoding="utf-8"))
+    except Exception:                                # noqa: BLE001
+        cache = {}
+todo = [i["contentid"] for i in tour_items if i["contentid"] not in cache]
+print("   상세 캐시 %s / %s — 이번에 %d건 채움"
+      % (format(len(cache), ","), format(len(tour_items), ","),
+         min(len(todo), TOUR_DETAIL)))
+# ★응답 값에 <br> 같은 태그가 그대로 들어온다("11:00~22:00<br>정확한 영업시간은 …").
+#   그냥 두면 화면에 태그가 글자로 보인다.
+TAG = re.compile(r"<[^>]{0,20}>")
+
+
+def clean(v, lim):
+    return TAG.sub(" / ", (v or "")).replace("&nbsp;", " ").strip(" /\t\r\n")[:lim]
+
+
+def one_detail(cid):
+    """상세 1건. 실패도 빈 값으로 기록한다 — 안 그러면 매주 같은 건에 계속 매달린다."""
+    try:
+        it = (tour("detailIntro2", contentId=cid, contentTypeId=39)["body"]
+              .get("items") or {}).get("item") or []
+        if isinstance(it, dict):
+            it = [it]
+        d0 = it[0] if it else {}
+        return cid, {"m": clean(d0.get("firstmenu") or d0.get("treatmenu"), 120),
+                     "o": clean(d0.get("opentimefood"), 60),
+                     "r": clean(d0.get("restdatefood"), 40)}
+    except Exception:                                # noqa: BLE001
+        return cid, {"m": "", "o": "", "r": ""}
+
+
+# ★병렬 금지 — 4스레드로 부르면 전량 HTTP 429 로 거부된다(2026-08-09 실측).
+#   순차 ~2.7초/건이 이 API 의 사실상 상한이다. 그래서 한 번에 다 못 받고 나눠 받는다.
+if todo:
+    _t0 = time.time()
+    for _i, cid in enumerate(todo[:TOUR_DETAIL], 1):
+        cid, val = one_detail(cid)
+        cache[cid] = val
+        if _i % 200 == 0:
+            print("      %d/%d (%.1f분)" % (_i, min(len(todo), TOUR_DETAIL), (time.time()-_t0)/60))
+            sys.stdout.flush()
+        time.sleep(0.05)
+    print("   상세 %d건 완료 (%.1f분)" % (min(len(todo), TOUR_DETAIL), (time.time()-_t0)/60))
+
+with io.open(CACHE_P, "w", encoding="utf-8") as f:
+    f.write(json.dumps(cache, ensure_ascii=False, separators=(",", ":")))
+if CACHE_ONLY:                     # 일일 캐시잡 — 사이트는 건드리지 않고 여기서 끝낸다
+    print("캐시 전용 모드 종료 — %s / %s" % (format(len(cache), ","), format(len(tour_items), ",")))
+    sys.exit(0)
+
+for i in tour_items:
+    addr = (i.get("addr1") or "").strip()
+    t = addr.split()
+    sgg = t[1] if len(t) >= 2 else "(미상)"
+    code = (i.get("lclsSystm3") or "").strip()
+    c = cache.get(i["contentid"], {})
+    bits = [x for x in (c.get("m"), c.get("o") and "🕐 " + c["o"],
+                        c.get("r") and "휴무 " + c["r"]) if x]
+    recs.append(dict(ds="관광공사 맛집", name=(i.get("title") or "").strip(),
+                     sido=norm_sido(t[0] if t else "", sgg), sgg=sgg,
+                     cat=LCLS_CAT.get(code, "기타"), src=LCLS.get(code, "(미분류)"),
+                     detail=" · ".join(bits), addr=addr,
+                     tel=(i.get("tel") or "").strip(), date="",
+                     # ★사진 URL 이 http 로 온다. https 사이트(Pages)에서는 혼합 콘텐츠로
+                     #   차단되므로 https 로 바꾼다(호스트가 https 를 정상 지원함을 확인).
+                     img=(i.get("firstimage2") or i.get("firstimage") or "")
+                        .strip().replace("http://", "https://")))
+
 
 # ── ① 모범음식점 — LOCALDATA 고정 URL ─────────────────────────────────
 print("① 모범음식점 수집")
@@ -197,9 +334,6 @@ for r in ch:
 
 # ── ③ 백년가게 — 2025 API 명단 + 2022 파일본에서 업종·연락처 이식 ──────
 print("③ 백년가게 수집")
-ODK = env_key("ODCLOUD_KEY")
-if not ODK:
-    raise RuntimeError("ODCLOUD_KEY 시크릿이 없다 (data.go.kr 일반 인증키)")
 uddi = "uddi:82fc1cc1-f636-46fc-ae0d-b1f2da5052b4"
 try:                                     # uddi 도 재발행 시 바뀔 수 있어 페이지에서 먼저 확인
     p2 = fetch("https://www.data.go.kr/data/15132695/fileData.do").decode("utf-8", "replace")
@@ -401,7 +535,7 @@ for ix in ba.values():                # 같은 건물이라도 상호가 다르�
                 if similar(recs[ix[x]]["name"], recs[ix[y]]["name"]):
                     union(ix[x], ix[y])
 
-DS_ORDER = ["모범음식점", "착한가격업소", "백년가게", "안심식당"]
+DS_ORDER = ["모범음식점", "착한가격업소", "백년가게", "안심식당", "관광공사 맛집"]
 mem = collections.defaultdict(list)
 for i in range(len(recs)):
     mem[find(i)].append(i)
@@ -434,7 +568,7 @@ def ix_of(lst, v):
 recs.sort(key=lambda r: (r["ds"], r["sido"], r["sgg"], r["name"]))
 out = [[r["name"], ix_of(sidos, r["sido"]), ix_of(sggs, r["sgg"]), dss.index(r["ds"]),
         ix_of(cats, r["cat"]), ix_of(srcs, r["src"]), r["detail"], r["addr"],
-        r["tel"], r["date"], r.get("gid", -1)] for r in recs]
+        r["tel"], r["date"], r.get("gid", -1), r.get("img", "")] for r in recs]
 
 today = time.strftime("%Y-%m-%d", time.gmtime(time.time() + 9 * 3600))   # KST
 DS_META = {
@@ -446,6 +580,8 @@ DS_META = {
                   "note": "명단 최신 API본 + 업종·연락처는 2022 파일본에서 이식"},
     "안심식당":     {"n": cnt["안심식당"], "date": today, "org": "농림축산식품부",
                   "note": "지정 유효분만 (취소분 제외)"},
+    "관광공사 맛집": {"n": cnt["관광공사 맛집"], "date": today, "org": "한국관광공사",
+                  "note": "구석구석 선정 · 사진·대표메뉴(점진 수집)"},
 }
 data = {"sido": sidos, "sgg": sggs, "ds": dss, "cat": cats, "src": srcs, "rows": out,
         "cats": CAT_ORDER, "meta": DS_META, "total": len(out), "gmask": gmask,
