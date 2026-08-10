@@ -42,6 +42,7 @@ header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.4px}
       padding:8px 10px;margin-bottom:6px}
 .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:5px;align-items:end}
 .filters .wide{grid-column:span 2}
+.filters .full{grid-column:1 / -1}   /* 검색은 지역 셀렉트 아랫줄을 통째로 쓴다 */
 .f label{display:block;font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600;line-height:1.3;letter-spacing:.02em;text-transform:none}
 select,input[type=search]{width:100%;padding:4px 7px;border:1px solid var(--line);border-radius:6px;
      background:var(--bg);color:var(--ink);font-size:12px;font-family:inherit}
@@ -184,14 +185,12 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
         <label>음식 대분류 <span style="font-weight:400;opacity:.8">— 여러 개 고를 수 있습니다</span></label>
         <div class="chips" id="fCat"></div>
       </div>
-      <div class="f wide">
+      <div class="f full">
         <label>검색 (업소명 · 주소 · 메뉴/음식)</label>
         <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000 — 내 메모도 검색됩니다" autocomplete="off">
       </div>
     </div>
     <div class="bar">
-      <div class="count"><b id="cNum">0</b><span id="cUnit">건</span><span id="cOf" style="color:var(--muted)"></span></div>
-      <div class="spacer"></div>
       <label class="chk"><input type="checkbox" id="fFood" checked> 요식업만</label>
       <label class="chk" title="켜 둔 인증을 모두 받은 가게만 봅니다(한 가게 한 줄)"><input type="checkbox" id="fAnd"> 인증 모두 충족</label>
       <span id="andHint" style="font-size:11px;color:var(--muted)"></span>
@@ -212,6 +211,13 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       </div>
       <button class="act" id="bFav">☆ 내 목록 <span id="favN">0</span></button>
       <button class="act" id="bReset">↺ 초기화</button>
+      <!-- 숨김 — 기능은 살아 있다. 콘솔에서 bFavOut.click() / bFavIn.click() 으로 부르거나,
+           평소에 쓰고 싶으면 이 두 줄의 class 에서 hide 만 지우면 버튼이 다시 보인다. -->
+      <button class="act hide" id="bFavOut" title="내 목록을 파일로 저장">⬆ 내보내기</button>
+      <button class="act hide" id="bFavIn" title="저장해 둔 내 목록 불러오기">⬇ 불러오기</button>
+      <input type="file" id="favFile" accept=".json" class="hide">
+      <div class="spacer"></div>
+      <div class="count"><b id="cNum">0</b><span id="cUnit">건</span><span id="cOf" style="color:var(--muted)"></span></div>
     </div>
   </div>
 
@@ -533,6 +539,56 @@ function apply(reset){
   cur=sorted;
   if(reset!==false) page=1;
   render();
+  saveState();
+}
+
+/* ── 마지막 조회조건 기억 ───────────────────────────────────────────────
+   조건이 바뀔 때마다(=apply 끝) 저장하고 다음 방문에 되살린다.
+   ★페이지 번호는 저장하지 않는다 — 조건이 아니라 위치이고, 데이터가 갱신되면
+     같은 번호가 다른 목록을 가리킨다.
+   ★되살릴 때는 반드시 값이 아직 존재하는지 확인한다. 주간 갱신으로 시군구가
+     사라지거나 출처 이름이 바뀌면(실제로 있었다) 없는 값을 넣게 되고,
+     그러면 조건에 맞는 게 하나도 없는 빈 화면으로 시작한다. */
+const FLT_LS='restcert.filters.v1';
+function saveState(){
+  try{
+    localStorage.setItem(FLT_LS, JSON.stringify({
+      v:1, sido:$('#fSido').value, sgg:$('#fSgg').value, gu:$('#fGu').value,
+      src:$('#fSrc').value, q:$('#fQ').value, cat:[...catSel],
+      sort:sortKey, dir:sortDir, food:$('#fFood').checked, and:andMode,
+      ds:[...dsOn], favOnly
+    }));
+  }catch(e){}
+}
+function restoreState(){          // 되살렸으면 true — 호출부가 reflow 를 또 돌리지 않게
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(FLT_LS)||'null'); }catch(e){}
+  if(!s || s.v!==1) return false;
+  // 출처: 지금 존재하는 이름만 — 하나도 안 남으면 전체로 되돌린다
+  const ds=(s.ds||[]).filter(d=>DS.includes(d));
+  if(ds.length){
+    dsOn=new Set(ds);
+    document.querySelectorAll('.ds').forEach(c=>c.classList.toggle('on', dsOn.has(c.dataset.ds)));
+  }
+  if(s.food===false) $('#fFood').checked=false;
+  if(s.and){ andMode=true; $('#fAnd').checked=true; }
+  if(['certs','name','region','ds','new'].includes(s.sort)){ sortKey=s.sort; $('#fSort').value=s.sort; }
+  if(s.dir===-1) sortDir=-1;
+  (s.cat||[]).filter(c=>CAT.includes(c)).forEach(c=>catSel.add(c));
+  if(s.favOnly) favOnly=true;
+
+  reflow();                       // 여기서 셀렉트 항목이 채워진다 → 그 다음에 값을 넣는다
+
+  const set=(sel,val)=>{ if(!val) return false;
+    const el=$(sel); el.value=val; return el.value===val; };  // 없는 값이면 ''로 튕긴다
+  if(set('#fSido',s.sido)){
+    refreshSgg();
+    if(set('#fSgg',s.sgg)){ refreshGu(); set('#fGu',s.gu); }
+  }
+  set('#fSrc',s.src);
+  if(s.q) $('#fQ').value=s.q;
+  apply();
+  return true;
 }
 
 function render(){
@@ -651,6 +707,38 @@ $('#tb').addEventListener('click',e=>{
     saveFavs(); rebuildMemo(); paintFav(pen.closest('td'), k);
   }
 });
+/* ── 내 목록 내보내기·불러오기 ─────────────────────────────────────────
+   버튼은 숨겨 두었지만(요청) 기능은 살아 있다 — 브라우저 데이터를 지우면 별표·메모가
+   함께 사라지므로 백업 경로 자체를 없애지는 않는다. 콘솔에서 bFavOut.click() 으로 부른다. */
+$('#bFavOut').addEventListener('click',()=>{
+  const n=Object.keys(favs).length;
+  if(!n){ alert('내 목록이 비어 있습니다. ☆를 눌러 담아 보세요.'); return; }
+  const b=new Blob([JSON.stringify({v:1,exported:new Date().toISOString(),favs},null,1)],
+                   {type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=`내목록_${n}곳.json`; a.click();
+  URL.revokeObjectURL(a.href);
+});
+$('#bFavIn').addEventListener('click',()=>$('#favFile').click());
+$('#favFile').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const j=JSON.parse(rd.result);
+      const inc=j.favs||j;
+      if(typeof inc!=='object') throw 0;
+      const before=Object.keys(favs).length;
+      // 덮어쓰기가 아니라 합친다 — 기기별로 담아둔 걸 잃지 않게
+      for(const k in inc) if(!favs[k]) favs[k]=inc[k];
+      saveFavs(); rebuildMemo(); syncFavUi(); apply();
+      alert(`불러왔습니다. ${before}곳 → ${Object.keys(favs).length}곳`);
+    }catch(err){ alert('내 목록 파일이 아닌 것 같습니다.'); }
+    e.target.value='';
+  };
+  rd.readAsText(f);
+});
+
 $('#bReset').addEventListener('click',()=>{
   ['#fSido','#fSgg','#fGu','#fSrc','#fQ'].forEach(s=>$(s).value='');
   catSel.clear();
@@ -673,7 +761,9 @@ $('#pg').addEventListener('click',e=>{const b=e.target.closest('button');
   if(!b||b.disabled)return; page=+b.dataset.p; render(); window.scrollTo({top:0,behavior:'smooth'});});
 
 $('#fMap').value=mapSvc;
-rebuildMemo(); syncFavUi(); reflow(); $('#fQ').focus();
+rebuildMemo();
+if(!restoreState()) reflow();   // 저장된 조건이 있으면 그걸로 시작한다
+syncFavUi(); $('#fQ').focus();
 </script>
 </body>
 </html>
