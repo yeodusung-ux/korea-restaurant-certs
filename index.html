@@ -13,8 +13,10 @@
   --d7:#2b5ea8; --d8:#b0364a;
   --shadow:none;
   /* ★조회조건 컨트롤 공통 높이. 셀렉트·검색·체크박스·버튼·페이저가 이 하나를 본다 —
-     각자 패딩으로 높이를 만들면 폰트를 조금만 건드려도 줄마다 높이가 어긋난다. */
-  --ctl:24px;
+     각자 패딩으로 높이를 만들면 폰트를 조금만 건드려도 줄마다 높이가 어긋난다.
+     20px = 11px 글씨의 줄상자(약 15px) + 위아래 여백 2px + 테두리 2px. 더 줄이면
+     셀렉트 화살표가 눌린다. */
+  --ctl:20px;
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#272d36;
@@ -50,13 +52,14 @@ header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.4px}
 .fright{min-width:0}
 .f label{display:block;font-size:9.5px;color:var(--muted);margin-bottom:2px;font-weight:600;line-height:1.3;letter-spacing:.02em;text-transform:none}
 select,input[type=search]{width:100%;height:var(--ctl);padding:0 6px;border:1px solid var(--line);
-     border-radius:6px;background:var(--bg);color:var(--ink);font-size:11.5px;font-family:inherit}
+     border-radius:6px;background:var(--bg);color:var(--ink);font-size:11px;font-family:inherit}
 select:focus,input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
 .bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;
      padding-top:8px;border-top:1px solid var(--line)}
 .count{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .count b{font-size:14px;color:var(--ink);font-weight:700}
 .spacer{flex:1}
+.brk{display:none}                 /* 폰에서만 켜진다(아래 미디어쿼리) */
 label.chk{display:flex;align-items:center;gap:5px;height:var(--ctl);padding:0 8px;font-size:11px;
      cursor:pointer;color:var(--muted);border:1px solid var(--line);border-radius:6px;
      background:var(--panel);font-weight:600;white-space:nowrap}
@@ -115,7 +118,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .pager{display:flex;gap:5px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
 .pager button{min-width:28px;height:var(--ctl);padding:0 8px;border:1px solid var(--line);
       background:var(--panel);color:var(--muted);border-radius:5px;cursor:pointer;
-      font-size:11.5px;font-family:inherit;font-variant-numeric:tabular-nums}
+      font-size:11px;font-family:inherit;font-variant-numeric:tabular-nums}
 .pager button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
 .pager button:disabled{opacity:.35;cursor:default}
 .empty{padding:44px 16px;text-align:center;color:var(--muted)}
@@ -141,9 +144,11 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
   /* 조건은 전부 보이게 — 가로 스크롤도 접기도 쓰지 않는다(사용자 요청).
      대신 칩·건수 라벨을 접어 줄 수를 줄인다(내용은 title 로 남는다). */
   .bar{row-gap:5px;gap:5px}
-  /* ★지도·정렬 셀렉트는 한 줄을 통째로 준다. 체크박스 옆에 끼우면 16px 글씨에서
-     '지도: 네이버ㅈ…' 처럼 잘린다(폰트를 줄이면 iOS 가 탭할 때 확대해 버린다). */
-  .bar .f{flex:1 1 100%;min-width:0}
+  /* 지도·정렬은 반씩 나눠 한 줄에 나란히. 16px 글씨(iOS 확대 방지)로는 긴 문구가
+     안 들어가므로 좁을 때만 syncOptLabels 가 문구를 짧은 것으로 갈아 끼운다.
+     ★.brk 로 줄을 먼저 끊는다 — 안 그러면 앞의 초기화 버튼 옆에 지도가 붙고 정렬만 밀려난다. */
+  .brk{display:block;flex-basis:100%;height:0;margin:0}
+  .bar .f{flex:1 1 calc(50% - 3px);min-width:0}
   button.act,label.chk{padding:0 11px;font-size:12px}
   .chip .c{display:none}
   .count{width:100%}
@@ -216,6 +221,9 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <label class="chk"><input type="checkbox" id="fFood" checked> 요식업만</label>
       <label class="chk" title="켜 둔 인증을 모두 받은 가게만 봅니다(한 가게 한 줄)"><input type="checkbox" id="fAnd"> 인증 모두 충족</label>
       <span id="andHint" style="font-size:11px;color:var(--muted)"></span>
+      <button class="act" id="bFav">☆ 내 목록 <span id="favN">0</span></button>
+      <button class="act" id="bReset">↺ 초기화</button>
+      <div class="brk"></div><!-- 폰에서만 줄을 끊어 지도·정렬을 한 줄에 나란히 둔다 -->
       <div class="f" style="min-width:100px">
         <select id="fMap">
           <option value="naver">지도: 네이버지도</option>
@@ -231,8 +239,6 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
           <option value="new">정렬: 지정일 최신순</option>
         </select>
       </div>
-      <button class="act" id="bFav">☆ 내 목록 <span id="favN">0</span></button>
-      <button class="act" id="bReset">↺ 초기화</button>
       <!-- 숨김 — 기능은 살아 있다. 콘솔에서 bFavOut.click() / bFavIn.click() 으로 부르거나,
            평소에 쓰고 싶으면 이 두 줄의 class 에서 hide 만 지우면 버튼이 다시 보인다. -->
       <button class="act hide" id="bFavOut" title="내 목록을 파일로 저장">⬆ 내보내기</button>
@@ -786,6 +792,31 @@ document.querySelectorAll('th[data-s]').forEach(th=>th.addEventListener('click',
 }));
 $('#pg').addEventListener('click',e=>{const b=e.target.closest('button');
   if(!b||b.disabled)return; page=+b.dataset.p; render(); window.scrollTo({top:0,behavior:'smooth'});});
+
+/* ── 폰에서 지도·정렬 문구 줄이기 ─────────────────────────────────────
+   폰에서는 두 셀렉트를 반씩 나눠 한 줄에 넣는다. 그런데 입력 글씨는 16px 밑으로
+   못 내린다(iOS 가 탭할 때 화면을 확대한다) → 반쪽 폭에 '지도: 네이버지도' 가 안 들어간다.
+   ★CSS 로는 option 텍스트를 못 바꾸므로 matchMedia 로 갈아 끼운다.
+     value 는 건드리지 않으므로 저장된 조회조건·지도 설정에 영향이 없다. */
+const SHORT_OPT = {
+  fMap:  {naver:'네이버지도', kakao:'카카오맵'},
+  fSort: {certs:'★ 인증순', name:'업소명순', region:'지역순', ds:'출처순', new:'최신순'}
+};
+const LONG_OPT = {};
+for (const id in SHORT_OPT){
+  LONG_OPT[id] = {};
+  for (const op of $('#'+id).options) LONG_OPT[id][op.value] = op.textContent;
+}
+const narrowMQ = matchMedia('(max-width:760px)');
+function syncOptLabels(){
+  const src = narrowMQ.matches ? SHORT_OPT : LONG_OPT;
+  for (const id in src) for (const op of $('#'+id).options) op.textContent = src[id][op.value];
+}
+// ★change 만 걸면 놓친다 — 기기 에뮬레이션·일부 브라우저에서 이 이벤트가 안 온다(실측).
+//   resize 는 반드시 오므로 둘 다 건다. 옵션이 7개뿐이라 매번 돌려도 부담이 없다.
+narrowMQ.addEventListener('change', syncOptLabels);
+addEventListener('resize', syncOptLabels);
+syncOptLabels();
 
 $('#fMap').value=mapSvc;
 rebuildMemo();
