@@ -88,11 +88,25 @@ python build/make_guide_csv.py 빨간.json build/guide_red.csv
 
 ## 로컬에서 돌려보기
 
+**UI(화면)만 고쳤다면 — 키도 네트워크도 필요 없다. 1초 미만.**
+
 ```bash
-export ODCLOUD_KEY=...
-export MAFRA_KEY=...
-python build/build_site.py      # → index.html 생성 (약 2분)
+python build/rebuild_template.py      # index.html 의 데이터를 그대로 새 template.html 에 다시 끼운다
 ```
+
+`index.html` 에 이미 최종 데이터가 박혀 있으므로 수집·정규화·동일가게 매칭을 통째로 건너뛴다.
+고친 `template.html` 과 새로 만들어진 `index.html` 을 함께 커밋하면 Pages 가 바로 서빙한다
+(주간 워크플로를 돌릴 필요가 없다).
+
+**데이터가 바뀌는 변경이면 전체 빌드**를 해야 한다 — 시드 CSV 수정, 소스 추가·삭제,
+분류 규칙·주소 정규화·동일가게 매칭 로직 변경:
+
+```bash
+export ODCLOUD_KEY=... MAFRA_KEY=... MFDS_KEY=...
+python build/build_site.py            # 수집부터 전부 (실측 3~18분, 관광공사 점진 수집 때문에 편차가 크다)
+```
+
+키가 없으면 Actions 탭에서 `Run workflow` 로 돌린다(시크릿이 거기 있다).
 
 의존성 없음(파이썬 표준 라이브러리만). Python 3.8 이상.
 
@@ -106,6 +120,7 @@ build/baengnyeon_2022.csv      백년가게 2022 파일본(업종·연락처 이
 build/guide_blue.csv           파란인증 시드(수동 관리)
 build/guide_red.csv            빨간인증 시드(수동 관리)
 build/make_guide_csv.py        네이버 지도 즐겨찾기 JSON → 위 시드 CSV 변환기
+build/rebuild_template.py      ★UI 만 고쳤을 때 쓰는 빠른 재렌더(키·네트워크 불필요, 1초 미만)
 .github/workflows/update.yml   주간 갱신
 ```
 
