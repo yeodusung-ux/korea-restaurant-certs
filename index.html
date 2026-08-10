@@ -40,9 +40,11 @@ header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.4px}
        font-variant-numeric:tabular-nums}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;
       padding:8px 10px;margin-bottom:6px}
-.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:5px;align-items:end}
-.filters .wide{grid-column:span 2}
-.filters .full{grid-column:1 / -1}   /* 검색은 지역 셀렉트 아랫줄을 통째로 쓴다 */
+/* 좌우 2단 — 왼쪽은 지역 셀렉트 한 줄 + 그 아래 검색, 오른쪽은 대분류 칩 */
+.filters{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:5px 14px;align-items:start}
+.fleft{display:flex;flex-direction:column;gap:5px;min-width:0}
+.frow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;align-items:end}
+.fright{min-width:0}
 .f label{display:block;font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600;line-height:1.3;letter-spacing:.02em;text-transform:none}
 select,input[type=search]{width:100%;padding:4px 7px;border:1px solid var(--line);border-radius:6px;
      background:var(--bg);color:var(--ink);font-size:12px;font-family:inherit}
@@ -115,8 +117,9 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 @media (max-width:760px){
   .wrap{padding:14px 12px 44px}
   header h1{font-size:19px}
-  .filters{grid-template-columns:1fr 1fr}
-  .filters .wide{grid-column:1 / -1}
+  /* 폰에서는 좌우 2단을 위아래로 쌓고, 지역 셀렉트 4개는 2열로 접는다 */
+  .filters{grid-template-columns:1fr;gap:6px}
+  .frow{grid-template-columns:1fr 1fr}
   select,input[type=search]{padding:11px 10px;font-size:16px}   /* 16px = iOS 자동확대 방지 */
   .bar{gap:8px}
   .bar .f{flex:1;min-width:0}
@@ -157,7 +160,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
     .note{line-height:1.75}
 }
 @media (max-width:340px){
-  .filters{grid-template-columns:1fr}
+  .frow{grid-template-columns:1fr}     /* 아주 좁으면 지역 셀렉트도 한 줄에 하나 */
 }
 </style>
 </head>
@@ -176,18 +179,23 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 
 <div id="list">
   <div class="card">
+    <!-- 좌: 지역·원본분류 한 줄 + 그 아래 검색 / 우: 음식 대분류 -->
     <div class="filters">
-      <div class="f"><label>시도</label><select id="fSido"></select></div>
-      <div class="f"><label>시 · 군</label><select id="fSgg"></select></div>
-      <div class="f"><label>구</label><select id="fGu"></select></div>
-      <div class="f"><label>원본 분류</label><select id="fSrc"></select></div>
-      <div class="f wide">
+      <div class="fleft">
+        <div class="frow">
+          <div class="f"><label>시도</label><select id="fSido"></select></div>
+          <div class="f"><label>시 · 군</label><select id="fSgg"></select></div>
+          <div class="f"><label>구</label><select id="fGu"></select></div>
+          <div class="f"><label>원본 분류</label><select id="fSrc"></select></div>
+        </div>
+        <div class="f">
+          <label>검색 (업소명 · 주소 · 메뉴/음식)</label>
+          <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000 — 내 메모도 검색됩니다" autocomplete="off">
+        </div>
+      </div>
+      <div class="f fright">
         <label>음식 대분류 <span style="font-weight:400;opacity:.8">— 여러 개 고를 수 있습니다</span></label>
         <div class="chips" id="fCat"></div>
-      </div>
-      <div class="f full">
-        <label>검색 (업소명 · 주소 · 메뉴/음식)</label>
-        <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000 — 내 메모도 검색됩니다" autocomplete="off">
       </div>
     </div>
     <div class="bar">
