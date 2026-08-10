@@ -12,6 +12,9 @@
   /* 직접 선별 2종 — 이름이 곧 색이다(파란인증=d7, 빨간인증=d8). 공공 6종과 갈리게 채도를 올렸다 */
   --d7:#2b5ea8; --d8:#b0364a;
   --shadow:none;
+  /* ★조회조건 컨트롤 공통 높이. 셀렉트·검색·체크박스·버튼·페이저가 이 하나를 본다 —
+     각자 패딩으로 높이를 만들면 폰트를 조금만 건드려도 줄마다 높이가 어긋난다. */
+  --ctl:24px;
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#272d36;
@@ -31,8 +34,8 @@ header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.4px}
 .sub b{color:var(--ink)}
 .dsbar{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .ds{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--panel);
-    border-radius:999px;padding:3px 9px 3px 6px;cursor:pointer;font-family:inherit;
-    font-size:11.5px;font-weight:600;color:var(--muted);opacity:.5}
+    border-radius:999px;height:22px;padding:0 9px 0 6px;cursor:pointer;font-family:inherit;
+    font-size:11px;font-weight:600;color:var(--muted);opacity:.5}
 .ds:hover{background:var(--hover)}
 .ds.on{opacity:1;color:var(--ink);border-color:var(--ink)}
 .ds i{width:8px;height:8px;border-radius:2px;flex:none;display:block}
@@ -45,24 +48,34 @@ header h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.4px}
 .fleft{display:flex;flex-direction:column;gap:5px;min-width:0}
 .frow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;align-items:end}
 .fright{min-width:0}
-.f label{display:block;font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600;line-height:1.3;letter-spacing:.02em;text-transform:none}
-select,input[type=search]{width:100%;padding:4px 7px;border:1px solid var(--line);border-radius:6px;
-     background:var(--bg);color:var(--ink);font-size:12px;font-family:inherit}
+.f label{display:block;font-size:9.5px;color:var(--muted);margin-bottom:2px;font-weight:600;line-height:1.3;letter-spacing:.02em;text-transform:none}
+select,input[type=search]{width:100%;height:var(--ctl);padding:0 6px;border:1px solid var(--line);
+     border-radius:6px;background:var(--bg);color:var(--ink);font-size:11.5px;font-family:inherit}
 select:focus,input:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-.bar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:9px;
-     padding-top:9px;border-top:1px solid var(--line)}
-.count{font-size:12.5px;color:var(--muted)}.count b{font-size:15px;color:var(--ink);font-weight:700}
+.bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;
+     padding-top:8px;border-top:1px solid var(--line)}
+.count{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.count b{font-size:14px;color:var(--ink);font-weight:700}
 .spacer{flex:1}
-label.chk{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;color:var(--muted);
-     padding:3px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-weight:600}
+label.chk{display:flex;align-items:center;gap:5px;height:var(--ctl);padding:0 8px;font-size:11px;
+     cursor:pointer;color:var(--muted);border:1px solid var(--line);border-radius:6px;
+     background:var(--panel);font-weight:600;white-space:nowrap}
+label.chk input{width:12px;height:12px;margin:0;flex:none}   /* 글씨가 작아진 만큼 네모도 줄인다 */
 /* 교집합은 기본이 꺼짐이라 켜진 걸 눈에 띄게 한다(요식업만은 기본 켜짐이라 제외) */
 label.chk:has(#fAnd:checked){border-color:var(--accent);color:var(--accent)}
-button.act{padding:3px 8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
-     border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:600;font-family:inherit}
+#andHint:empty{display:none}      /* 비었을 때 flex gap 만 벌어지는 걸 막는다 */
+button.act{height:var(--ctl);padding:0 9px;border:1px solid var(--line);background:var(--panel);
+     color:var(--muted);border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;
+     font-family:inherit;white-space:nowrap}
 button.act:hover{background:var(--hover)}
 .tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
 table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:1020px}
-th,td{padding:5px 9px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.42}
+/* ★word-break 기본값은 한글을 음절 단위로 자른다 — '경상북도 고령/군', '(미분/류)' 처럼
+   낱말 한가운데서 줄이 바뀐다. keep-all 이면 띄어쓰기에서만 끊는다. */
+th,td{padding:5px 9px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;
+      line-height:1.42;word-break:keep-all}
+td.c-region{min-width:118px}
+td.c-src{min-width:82px}
 th{background:var(--chip);font-size:11px;color:var(--muted);position:sticky;top:0;
    cursor:pointer;user-select:none;white-space:nowrap;z-index:2;font-weight:600;padding:6px 9px}
 th:hover{color:var(--accent)}
@@ -88,20 +101,21 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .stars{color:#c8901a;font-size:11px;font-weight:700;white-space:nowrap;margin-right:5px;
        font-variant-numeric:tabular-nums}
 .stars .off{display:none}
-td.cert{min-width:206px}
+td.cert{min-width:244px}   /* 8종이 되며 배지가 6개까지 나온다 — 좁으면 3줄로 늘어져 행이 높아진다 */
 .chips{display:flex;flex-wrap:wrap;gap:4px}
-.chip{padding:3px 8px;border:1px solid var(--line);background:var(--panel);color:var(--muted);
-      border-radius:999px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;
-      white-space:nowrap}
+.chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border:1px solid var(--line);
+      background:var(--panel);color:var(--muted);border-radius:999px;cursor:pointer;
+      font-size:10.5px;font-weight:600;font-family:inherit;white-space:nowrap}
 .chip:hover{background:var(--hover)}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .chip .c{opacity:.7;font-weight:500;margin-left:3px}
 .thumb{width:42px;height:42px;object-fit:cover;border-radius:7px;border:1px solid var(--line);
        float:left;margin:1px 9px 2px 0;background:var(--chip)}
 button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
-.pager{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
-.pager button{min-width:30px;padding:4px 8px;border:1px solid var(--line);background:var(--panel);
-      color:var(--muted);border-radius:5px;cursor:pointer;font-size:12px;font-family:inherit}
+.pager{display:flex;gap:5px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
+.pager button{min-width:28px;height:var(--ctl);padding:0 8px;border:1px solid var(--line);
+      background:var(--panel);color:var(--muted);border-radius:5px;cursor:pointer;
+      font-size:11.5px;font-family:inherit;font-variant-numeric:tabular-nums}
 .pager button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
 .pager button:disabled{opacity:.35;cursor:default}
 .empty{padding:44px 16px;text-align:center;color:var(--muted)}
@@ -117,26 +131,26 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 @media (max-width:760px){
   .wrap{padding:14px 12px 44px}
   header h1{font-size:19px}
+  /* ★손가락으로 누르는 화면이라 컨트롤 높이를 한 번에 키운다(--ctl 하나만 바꾼다).
+     입력 글씨는 16px 미만이면 iOS 가 탭할 때 화면을 확대해 버리므로 16px 를 지킨다. */
+  :root{--ctl:38px}
   /* 폰에서는 좌우 2단을 위아래로 쌓고, 지역 셀렉트 4개는 2열로 접는다 */
   .filters{grid-template-columns:1fr;gap:6px}
   .frow{grid-template-columns:1fr 1fr}
-  select,input[type=search]{padding:11px 10px;font-size:16px}   /* 16px = iOS 자동확대 방지 */
-  .bar{gap:8px}
-  .bar .f{flex:1;min-width:0}
-  button.act,label.chk{padding:11px 12px}
-
+  select,input[type=search]{padding:0 9px;font-size:16px}
   /* 조건은 전부 보이게 — 가로 스크롤도 접기도 쓰지 않는다(사용자 요청).
-     대신 칩·입력을 더 작게 만들어 줄바꿈으로 담는다. */
-  .bar{row-gap:4px;gap:5px}
-  /* 좁은 화면에선 건수·긴 라벨을 접어 줄 수를 줄인다(내용은 title 로 남는다) */
+     대신 칩·건수 라벨을 접어 줄 수를 줄인다(내용은 title 로 남는다). */
+  .bar{row-gap:5px;gap:5px}
+  /* ★지도·정렬 셀렉트는 한 줄을 통째로 준다. 체크박스 옆에 끼우면 16px 글씨에서
+     '지도: 네이버ㅈ…' 처럼 잘린다(폰트를 줄이면 iOS 가 탭할 때 확대해 버린다). */
+  .bar .f{flex:1 1 100%;min-width:0}
+  button.act,label.chk{padding:0 11px;font-size:12px}
   .chip .c{display:none}
-  button.act,label.chk{padding:6px 8px;font-size:11px}
   .count{width:100%}
   .dsbar{flex:1 1 100%;min-width:0}
-  .ds{padding:3px 8px 3px 6px;font-size:11px;gap:4px}
-  .ds em{font-size:10px}
-  .chip{padding:3px 7px;font-size:10.5px}
-  select,input[type=search]{padding:5px 7px;font-size:16px}
+  .ds{height:26px;padding:0 9px 0 7px;font-size:11.5px;gap:4px}
+  .ds em{font-size:10.5px}
+  .chip{height:26px;padding:0 10px;font-size:11.5px}
   .f label{font-size:10px;margin-bottom:1px}
   /* 카드에서 중복·저가치 줄을 뺀다(원본분류·지정일) */
   td.c-src,td.c-date{display:none}
@@ -156,8 +170,8 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
   td.detail span.clip{-webkit-line-clamp:none;display:inline}
   td.addr a{word-break:break-all}
   .pager{gap:5px}
-  .pager button{min-width:40px;padding:9px 10px}
-    .note{line-height:1.75}
+  .pager button{min-width:40px;padding:0 10px;font-size:13px}
+  .note{line-height:1.75}
 }
 @media (max-width:340px){
   .frow{grid-template-columns:1fr}     /* 아주 좁으면 지역 셀렉트도 한 줄에 하나 */
@@ -204,8 +218,8 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <span id="andHint" style="font-size:11px;color:var(--muted)"></span>
       <div class="f" style="min-width:100px">
         <select id="fMap">
-          <option value="naver">🗺 네이버지도</option>
-          <option value="kakao">🗺 카카오맵</option>
+          <option value="naver">지도: 네이버지도</option>
+          <option value="kakao">지도: 카카오맵</option>
         </select>
       </div>
       <div class="f" style="min-width:136px">
@@ -433,7 +447,7 @@ $('#footNote').innerHTML = `
  주소를 누르면 선택한 지도(기본 <b>네이버지도</b>, 카카오맵으로 바꿀 수 있습니다)에서 열리고, 전화번호를 누르면 전화가 걸립니다.`;
 
 /* 필터 옵션 */
-let SM = 0, POOL = [];                       // SM=선택 인증 비트마스크, POOL=R 의 인덱스 배열
+let SM = 0, POOL = [], POOL_STORES = 0;      // SM=선택 인증 비트마스크, POOL=R 의 인덱스 배열
 const foodOk = r => !$('#fFood').checked || CAT[r[N_CAT]]!=='비요식';
 /* ★교집합(모두 충족) — 켜면 '켜 둔 인증을 전부 받은 가게'만 남긴다.
    판정은 행이 아니라 **가게 단위**다. 한 가게가 여러 출처에 흩어져 있으므로
@@ -458,6 +472,10 @@ function refreshPool(){
     }
     POOL = [...best.values()];
   }
+  // ★'N곳 / M곳' 의 분모도 같은 규칙으로 접어 둔다.
+  //   접힌 결과(76,761곳)를 안 접은 행 수(90,189)로 나눠 보이면 필터로 걸러진 것처럼 읽힌다 —
+  //   실제로는 전부 통과했고 같은 가게가 합쳐진 것뿐이다. 여기서 한 번만 센다(타건마다 X).
+  POOL_STORES = andMode ? POOL.length : new Set(POOL.map(i=>storeKey(R[i]))).size;
   const n = dsOn.size;
   $('#andHint').textContent = !andMode ? ''
     : (n>1 ? `${n}개를 모두 받은 곳만` : '인증 1개만 선택돼 있어 결과가 같습니다');
@@ -603,7 +621,8 @@ function render(){
   $('#cNum').textContent=nf(cur.length);
   const unit = (andMode || sortKey==='certs') ? '곳' : '건';
   $('#cUnit').textContent = unit;
-  $('#cOf').textContent = cur.length===POOL.length ? '' : ' / '+nf(POOL.length)+unit;
+  const total = (andMode||sortKey==='certs') ? POOL_STORES : POOL.length;   // 단위를 맞춰서 비교한다
+  $('#cOf').textContent = cur.length===total ? '' : ' / '+nf(total)+unit;
   const maxP=Math.max(1,Math.ceil(cur.length/PER)); if(page>maxP) page=maxP;
   const sl=cur.slice((page-1)*PER,page*PER);
   $('#noRes').classList.toggle('hide',cur.length>0);
