@@ -84,6 +84,9 @@ th{background:var(--chip);font-size:11px;color:var(--muted);position:sticky;top:
 th:hover{color:var(--accent)}
 tbody tr:hover{background:var(--hover)}
 td.name{font-weight:600;white-space:nowrap}
+/* 업소명도 지도로 간다. 표가 온통 파래지지 않게 평소엔 본문색이고 hover 때만 링크처럼 보인다 */
+td.name a.nm{color:inherit;text-decoration:none;cursor:pointer}
+td.name a.nm:hover{color:var(--accent);text-decoration:underline}
 td.addr{color:var(--muted);font-size:12px;min-width:190px}
 td.detail{font-size:12px;max-width:250px;min-width:150px}
 td.detail span.clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
@@ -170,6 +173,8 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
   tbody td::before{content:attr(data-label);flex:none;width:52px;color:var(--muted);
                    font-size:11px;font-weight:700;letter-spacing:.02em}
   td.name{display:block;font-size:15px;font-weight:700;padding:0 0 4px;white-space:normal}
+  /* 손가락으로 누르기 좋게 세로 여백만 넓힌다 — 인라인이라 글줄 위치는 그대로다 */
+  td.name a.nm{padding:5px 0}
   td.cert{display:block;padding-bottom:5px}
   td.detail,td.addr{max-width:none;min-width:0}
   td.detail span.clip{-webkit-line-clamp:none;display:inline}
@@ -352,6 +357,9 @@ function mapQ(r){
   return rest.startsWith(sgg) ? sido + ' ' + rest : sido + ' ' + sgg + ' ' + rest;
 }
 const mapUrl = q => (MAPS[mapSvc]||MAPS.naver).url(q);
+/* 업소명을 눌렀을 때 쓰는 질의 — 주소에 상호를 붙이면 지도가 '그 지점'이 아니라
+   '그 가게'로 데려간다. 단 이름이 깨진 행(？)은 붙이면 검색이 되레 안 잡히므로 주소만 쓴다. */
+const mapQName = r => /[？?]/.test(r[N_NAME]) ? mapQ(r) : mapQ(r) + ' ' + r[N_NAME];
 const rowMask = r => r[N_GID]>=0 ? GMASK[r[N_GID]] : (1<<r[N_DS]);
 // 교집합 모드에서 한 가게를 한 줄로 접을 때 쓰는 키(묶이지 않은 행은 행 자신이 곧 가게)
 const storeKey = r => r[N_GID]>=0 ? r[N_GID] : r;
@@ -643,7 +651,7 @@ function render(){
                       :'<span style="color:var(--muted)">-</span>';
     const fk = favKey(r), fv = favs[fk];
     return `<tr>
-      <td class="name">${r[N_IMG]?`<img class="thumb" src="${esc(r[N_IMG])}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}<button class="fav${fv?' on':''}" data-k="${esc(fk)}" title="내 목록에 담기">${fv?'★':'☆'}</button><span class="stars" title="인증 ${cn}개">★${cn}</span>${esc(r[N_NAME])}${
+      <td class="name">${r[N_IMG]?`<img class="thumb" src="${esc(r[N_IMG])}" alt="" loading="lazy" referrerpolicy="no-referrer">`:''}<button class="fav${fv?' on':''}" data-k="${esc(fk)}" title="내 목록에 담기">${fv?'★':'☆'}</button><span class="stars" title="인증 ${cn}개">★${cn}</span><a class="nm" href="${esc(mapUrl(mapQName(r)))}" target="_blank" rel="noopener" title="${esc(r[N_NAME])} — ${esc((MAPS[mapSvc]||MAPS.naver).name)}에서 열기">${esc(r[N_NAME])}</a>${
         fv ? `<button class="memo-edit" data-k="${esc(fk)}">${fv.m?'✎ 메모':'✎ 메모 달기'}</button>` : ''}${
         fv && fv.m ? `<div class="memo">${esc(fv.m)}</div>` : ''}</td>
       <td class="cert" data-label="인증">${badges}</td>
