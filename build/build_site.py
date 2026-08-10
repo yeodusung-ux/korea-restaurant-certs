@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
-"""4개 공공데이터를 받아 조회용 index.html 을 만든다. (GitHub Actions 주 1회 실행)
+"""공공데이터 6종 + 직접 선별 2종으로 조회용 index.html 을 만든다. (GitHub Actions 주 1회)
 
   모범음식점   행정안전부/LOCALDATA   고정 URL, 인증 불필요
   착한가격업소 행정안전부/공공데이터포털 ★atchFileId 가 갱신마다 바뀌어 페이지에서 파싱
   백년가게     소상공인시장진흥공단     ODcloud API(키 필요) + 2022 파일본에서 업종·연락처 이식
   안심식당     농림축산식품부          MAFRA OpenAPI(별도 키 필요)
+  관광공사 맛집 한국관광공사           TourAPI(ODcloud 키 공용) + 상세는 캐시에 점진 축적
+  식품안심업소 식품의약품안전처        식품안전나라 OpenAPI(별도 키 필요)
+  파란인증     직접 선별              ★API 없음 → build/guide_blue.csv 시드
+  빨간인증     직접 선별              ★API 없음 → build/guide_red.csv 시드
 
 ★설계 원칙 — 부분 실패는 전체 실패로 만든다.
   한 소스가 비면 그만큼이 조용히 사라진 사이트가 배포된다(안심식당만 42,630건).
@@ -21,8 +25,10 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/125.0 Safari/537.36")
 
 # 소스별 최소 기대 건수(실측의 절반 수준) — 미달이면 수집이 깨진 것으로 본다
+# 직접 선별 2종은 네트워크가 아니라 시드 CSV 라, 미달 = 파일이 깨졌거나 잘못 덮인 것이다.
 MIN_ROWS = {"모범음식점": 5000, "착한가격업소": 5000, "백년가게": 500,
-            "안심식당": 20000, "관광공사 맛집": 5000, "식품안심업소": 3000}
+            "안심식당": 20000, "관광공사 맛집": 5000, "식품안심업소": 3000,
+            "파란인증": 150, "빨간인증": 100}
 
 
 def fetch(url, referer=None, retries=5, timeout=180):
@@ -507,6 +513,56 @@ for r in hg:
                      addr=addr, tel=g(r, "TELNO"),
                      date=("%s-%s-%s" % (ymd[:4], ymd[4:6], ymd[6:])) if len(ymd) == 8 else ""))
 
+# ── ⑦⑧ 파란인증 · 빨간인증 — 직접 선별한 목록(시드 CSV) ────────────────
+# 공공 API 가 아니다. 사람이 네이버 지도 즐겨찾기로 관리하고 make_guide_csv.py 로 굳힌 파일을 읽는다.
+# 네트워크를 안 타므로 공공 API 장애와 무관하고, 파일이 비거나 깨지면 MIN_ROWS 에서 걸린다.
+# 이름은 화면의 칩 색과 맞춘다 — 파란인증=--d7(파랑), 빨간인증=--d8(빨강).
+GUIDES = [("파란인증", "guide_blue.csv"), ("빨간인증", "guide_red.csv")]
+# 즐겨찾기의 mcidName 은 3종뿐이라 그대로 매핑한다. '음식점'은 정보가 없어 상호로 추정한다.
+GUIDE_KIND_CAT = {"카페": "카페·제과", "BAR": "기타"}
+
+
+def guide_addr(addr):
+    """네이버 표기를 다른 소스와 같은 모양으로 되돌린다.
+
+    '서울 중구 을지로3길 24' → ('서울특별시', '중구', '서울특별시 중구 을지로3길 24')
+
+    ★시도를 전체이름으로 펴서 주소 문자열까지 다시 조립하는 게 핵심이다.
+      구(區) 추출과 지도 질의 정규화가 둘 다 '시도 전체이름 + 시군구' 표기를 전제한다.
+    ★네이버는 광주·전남을 '전남광주' 한 덩어리로 준다(실측 12건) — 공공데이터의
+      '전남광주통합특별시' 와 같은 병이라 같은 규칙(시군구를 보고 되분리)으로 넘긴다.
+    ★세종은 시군구 자리에 읍·면이 온다('세종 전동면 고산길 71') → 시군구를 비워 두면
+      아래 '시군구 표기 통일' 단계가 '세종시' 로 채운다.
+    """
+    t = (addr or "").split()
+    if not t:
+        return "", "", addr
+    rest = t[1:]
+    sgg = rest[0] if rest and rest[0].endswith(("시", "군", "구")) else ""
+    sido = norm_sido("전남광주통합특별시" if t[0] == "전남광주" else t[0], sgg)
+    return sido, sgg, " ".join([sido] + rest)
+
+
+for _ds, _fn in GUIDES:
+    print("%s 시드 읽기" % _ds)
+    _path = os.path.join(HERE, _fn)
+    with io.open(_path, encoding="utf-8") as _f:
+        _rows = list(csv.DictReader(_f))
+    for r in _rows:
+        name, addr, kind = g(r, "name"), g(r, "addr"), g(r, "kind")
+        if not name or not addr:
+            continue
+        sido, sgg, full = guide_addr(addr)
+        cat = GUIDE_KIND_CAT.get(kind) or classify(name)
+        if cat == "비요식":
+            # ★상호에 '호텔'·'사진' 같은 업종어가 들어간 식당이 비요식으로 빠지는 걸 막는다.
+            #   여기 실린 곳은 정의상 요식업이다 — 추정이 어긋나면 '기타'로 둔다.
+            cat = "기타"
+        recs.append(dict(ds=_ds, name=name, sido=sido, sgg=sgg, cat=cat,
+                         src=kind or "음식점", detail="", addr=full,
+                         tel="", date=""))       # 즐겨찾기엔 전화번호·지정일이 없다
+    print("   %s행" % format(len(_rows), ","))
+
 # ── 수집 건전성 검사 — 하나라도 미달이면 index.html 을 건드리지 않는다 ──
 cnt = collections.Counter(r["ds"] for r in recs)
 short = {k: cnt[k] for k, lo in MIN_ROWS.items() if cnt[k] < lo}
@@ -626,7 +682,8 @@ for ix in ba.values():                # 같은 건물이라도 상호가 다르�
                 if similar(recs[ix[x]]["name"], recs[ix[y]]["name"]):
                     union(ix[x], ix[y])
 
-DS_ORDER = ["모범음식점", "착한가격업소", "백년가게", "안심식당", "관광공사 맛집", "식품안심업소"]
+DS_ORDER = ["모범음식점", "착한가격업소", "백년가게", "안심식당", "관광공사 맛집", "식품안심업소",
+            "파란인증", "빨간인증"]
 mem = collections.defaultdict(list)
 for i in range(len(recs)):
     mem[find(i)].append(i)
@@ -731,6 +788,10 @@ DS_META = {
                   "note": "구석구석 선정 · 사진·대표메뉴(점진 수집)"},
     "식품안심업소": {"n": cnt["식품안심업소"], "date": today, "org": "식품의약품안전처",
                   "note": "일반음식점·유효기간 내 · 프랜차이즈 제외 · 대분류는 상호명 추정"},
+    "파란인증":     {"n": cnt["파란인증"], "date": today, "org": "직접 선별(비공식)",
+                  "note": "공공데이터 아님 — 수동 관리 목록 · 전화번호·지정일 없음"},
+    "빨간인증":     {"n": cnt["빨간인증"], "date": today, "org": "직접 선별(비공식)",
+                  "note": "공공데이터 아님 — 수동 관리 목록 · 전화번호·지정일 없음"},
 }
 data = {"sido": sidos, "sgg": sggs, "ds": dss, "cat": cats, "src": srcs, "gu": gus, "rows": out,
         "cats": CAT_ORDER, "meta": DS_META, "total": len(out), "gmask": gmask,

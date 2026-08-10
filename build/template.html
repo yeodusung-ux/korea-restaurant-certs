@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>좋은 음식점 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사 · 식품안심업소</title>
+<title>좋은 음식점 통합 조회 — 모범음식점 · 착한가격업소 · 백년가게 · 안심식당 · 관광공사 · 식품안심업소 · 파란인증 · 빨간인증</title>
 <style>
 :root{
   --bg:#f6f7f9; --panel:#fff; --ink:#1a1d21; --muted:#6b7280; --line:#e3e6ea;
   --accent:#1f6feb; --accent-soft:#e8f0fe; --chip:#f0f2f5; --hover:#f7f9fc;
   --d1:#4a6fa5; --d2:#3f8f7f; --d3:#a07840; --d4:#b06a4f; --d5:#7a6aa8; --d6:#4a8296;
+  /* 민간 가이드 2종 — 남은 색상(진파랑·적색)을 쓴다. 공공 6종과 눈으로 갈리게 채도를 올렸다 */
+  --d7:#2b5ea8; --d8:#b0364a;
   --shadow:none;
 }
 @media (prefers-color-scheme:dark){
   :root{ --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --muted:#9aa4b2; --line:#272d36;
          --accent:#4b93ff; --accent-soft:#16273f; --chip:#1e242c; --hover:#1c222a;
          --d1:#7ea3d6; --d2:#6cbfab; --d3:#d0a86a; --d4:#e0977a; --d5:#a89bd6; --d6:#7fb4c6;
+         --d7:#6f9ee0; --d8:#e5899a;
          --shadow:none; }
 }
 *{box-sizing:border-box}
@@ -177,7 +180,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
 <div class="wrap">
 <header>
   <h1>🍚 좋은 음식점 통합 조회</h1>
-  <div class="sub">공공데이터 <b id="hDs">6</b>종 · <b id="hTotal">0</b>건</div>
+  <div class="sub">인증·선정 <b id="hDs">8</b>종 · <b id="hTotal">0</b>건</div>
 </header>
 
 <div class="card" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -199,7 +202,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       </div>
       <div class="f wide">
         <label>검색 (업소명 · 주소 · 메뉴/음식)</label>
-        <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000" autocomplete="off">
+        <input type="search" id="fQ" placeholder="예) 냉면, 삼계탕, 강남구, 7000 — 내 메모도 검색됩니다" autocomplete="off">
       </div>
     </div>
     <div class="bar">
@@ -309,7 +312,8 @@ if (!document.querySelector('meta[name="viewport"]')) {
 const D = /*__DATA__*/;
 const SIDO=D.sido, SGG=D.sgg, DS=D.ds, CAT=D.cat, SRC=D.src, R=D.rows;
 const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,N_DATE=9,N_GID=10,N_IMG=11,N_GU=12;
-const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)','var(--d6)'];
+const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)','var(--d6)',
+                     'var(--d7)','var(--d8)'];
 const GMASK=D.gmask;
 let cur=[], page=1, sortKey='certs', sortDir=1, dsOn=new Set(DS);
 let catSel = new Set();                 // 대분류 다중선택(비어 있으면 전체)
@@ -374,6 +378,39 @@ let favs = {};
 try { favs = JSON.parse(localStorage.getItem(FAV_LS) || '{}') || {}; } catch(e) { favs = {}; }
 let favOnly = false;
 const saveFavs = () => { try { localStorage.setItem(FAV_LS, JSON.stringify(favs)); } catch(e) {} };
+
+/* ── 메모 검색 ──────────────────────────────────────────────────────
+   메모는 localStorage 라 SEARCH(빌드 때 굳는 문자열)에 넣을 수 없다.
+   ★그렇다고 검색할 때마다 전 행의 favKey 를 만들면 안 된다 — 9.3만 행 정규식이
+     타건마다 돈다. favKey→행 역인덱스를 딱 한 번 만들어 두고, 메모가 바뀔 때
+     favs(수백 개)만 훑어 MEMO 배열을 다시 칠한다.
+   ★역인덱스는 메모가 하나라도 있을 때만 만든다(메모를 안 쓰는 사람은 비용 0). */
+let KEYROWS = null;
+function keyRows(){
+  if (KEYROWS) return KEYROWS;
+  KEYROWS = new Map();
+  for (let i=0;i<R.length;i++){
+    const k = favKey(R[i]);
+    let a = KEYROWS.get(k);
+    if (!a) { a=[]; KEYROWS.set(k,a); }
+    a.push(i);
+  }
+  return KEYROWS;
+}
+let MEMO = [];                      // 행번호 → 소문자 메모(희소 배열)
+function rebuildMemo(){
+  MEMO = [];
+  let any = false;
+  for (const k in favs) if (favs[k] && favs[k].m) { any = true; break; }
+  if (!any) return;
+  const kr = keyRows();
+  for (const k in favs){
+    const m = ((favs[k] && favs[k].m) || '').toLowerCase();
+    if (!m) continue;
+    const rows = kr.get(k);
+    if (rows) for (const i of rows) MEMO[i] = m;
+  }
+}
 function syncFavUi(){
   const n = Object.keys(favs).length;
   $('#favN').textContent = n;
@@ -403,8 +440,12 @@ $('#footNote').innerHTML = `
  <b>안심식당</b>(음식종류 6종)·<b>착한가격업소</b>(업종 11종)는 원본이 열거형이라 <b>추측 없이 그대로 매핑</b>했지만,
  <b>모범음식점</b>(음식의유형 233종)·<b>백년가게</b>(주요사업 782종)는 자유입력이라 키워드 규칙으로 <b>추정</b>했습니다.
  정확한 값은 언제나 <b>원본분류</b> 열을 보세요.<br>
- ⚠️ <b>여섯 데이터는 서로 다른 제도</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생, 관광공사=관광 콘텐츠 선정, 식품안심업소=위생 인증.
- 같은 가게가 둘 이상에 등재될 수 있습니다. <b>★ 별점은 그렇게 겹친 인증 수</b>이며, 별점순으로 볼 때만 한 줄로 접습니다.<br>
+ ⚠️ <b>여덟 데이터는 서로 다른 기준</b>입니다 — 모범음식점=위생, 착한가격업소=가격, 백년가게=업력, 안심식당=방역·위생, 관광공사=관광 콘텐츠 선정, 식품안심업소=위생 인증,
+ <b>파란인증·빨간인증=직접 다녀보고 고른 곳</b>. 같은 가게가 둘 이상에 등재될 수 있습니다.
+ <b>★ 별점은 그렇게 겹친 인증 수</b>이며, 별점순으로 볼 때만 한 줄로 접습니다.<br>
+ ⚠️ <b>파란인증·빨간인증은 공공데이터가 아닌 개인 선별 목록</b>입니다. 공식 제도가 아니며
+ 나머지 여섯과 달리 자동 갱신되지 않고, 전화번호·지정일이 없습니다.<br>
+ ℹ️ <b>검색은 내 목록에 적어 둔 메모까지 훑습니다</b> — 메모에 <code>재방문</code> 처럼 적어 두면 그 말로 다시 찾을 수 있습니다.<br>
  ⚠️ 각 출처는 <b>지정 취소·폐업분을 걸러낸 유효분만</b> 담았습니다 —
  모범음식점 65,426→11,455 · 안심식당 67,740→42,630.<br>
  ⚠️ <b>백년가게의 업종·연락처는 2022년 파일본에서 이식</b>한 값입니다(명단은 2025년판).
@@ -478,7 +519,7 @@ function apply(reset){
        (!sd||SIDO[r[N_SIDO]]===sd) && (!sg||SGG[r[N_SGG]]===sg) &&
        (!gu||GU[r[N_GU]]===gu) &&
        (!nCat||catSel.has(CAT[r[N_CAT]])) && (!sc||SRC[r[N_SRC]]===sc) &&
-       (!q ||SEARCH[i].includes(q))) cur.push(r);
+       (!q ||SEARCH[i].includes(q)||(MEMO[i]!==undefined&&MEMO[i].includes(q)))) cur.push(r);
   }
   const K={ certs:r=>r[N_NAME], name:r=>r[N_NAME].replace(/[？?]/g,'')||'￿', region:r=>SIDO[r[N_SIDO]]+' '+SGG[r[N_SGG]]+' '+r[N_NAME],
     ds:r=>DS[r[N_DS]]+' '+r[N_NAME], cat:r=>CAT[r[N_CAT]]+' '+r[N_NAME],
@@ -649,7 +690,7 @@ $('#tb').addEventListener('click',e=>{
   if(star){
     const k=star.dataset.k;
     if(favs[k]) delete favs[k]; else favs[k]={t:Date.now(),m:''};
-    saveFavs(); syncFavUi();
+    saveFavs(); rebuildMemo(); syncFavUi();      // 별을 빼면 그 메모도 검색에서 빠져야 한다
     if(favOnly) apply(false); else paintFav(star.closest('td'), k);
     return;
   }
@@ -659,7 +700,7 @@ $('#tb').addEventListener('click',e=>{
     const v=prompt('메모 (비우면 삭제)', (favs[k]&&favs[k].m)||'');
     if(v===null) return;
     favs[k]={t:(favs[k]&&favs[k].t)||Date.now(), m:v.trim()};
-    saveFavs(); paintFav(pen.closest('td'), k);
+    saveFavs(); rebuildMemo(); paintFav(pen.closest('td'), k);
   }
 });
 $('#bFavOut').addEventListener('click',()=>{
@@ -723,7 +764,7 @@ function pasteRun(){
       if (!favs[k]){ favs[k]={t:Date.now(),m:''}; added++; }
     }
   }
-  saveFavs(); syncFavUi(); apply();
+  saveFavs(); rebuildMemo(); syncFavUi(); apply();
 
   const box=[];
   box.push(`<b>${nf(lines.length)}줄</b> 중 <b style="color:var(--accent)">${nf(added)}곳</b>을 새로 담았습니다`
@@ -751,7 +792,7 @@ $('#favFile').addEventListener('change',e=>{
       const before=Object.keys(favs).length;
       // 덮어쓰기가 아니라 합친다 — 기기별로 담아둔 걸 잃지 않게
       for(const k in inc) if(!favs[k]) favs[k]=inc[k];
-      saveFavs(); syncFavUi(); apply();
+      saveFavs(); rebuildMemo(); syncFavUi(); apply();
       alert(`불러왔습니다. ${before}곳 → ${Object.keys(favs).length}곳`);
     }catch(err){ alert('내 목록 파일이 아닌 것 같습니다.'); }
     e.target.value='';
@@ -793,7 +834,7 @@ $('#pvTbl').addEventListener('click',e=>{
 });
 
 $('#fMap').value=mapSvc;
-syncFavUi(); reflow(); $('#fQ').focus();
+rebuildMemo(); syncFavUi(); reflow(); $('#fQ').focus();
 </script>
 </body>
 </html>
