@@ -68,10 +68,13 @@ def csv_rows(raw, encodings=("utf-8-sig", "cp949")):
         try:
             t = raw.decode(e)
             if "�" not in t:
-                return list(csv.DictReader(io.StringIO(t)))
+                # ★newline="" 이 없으면 따옴표 안의 줄바꿈을 csv 가 필드 구분으로 읽고
+                #   'new-line character seen in unquoted field' 로 죽는다(2026-08-25
+                #   착한가격업소 원본에 줄바꿈 낀 메뉴명이 들어오며 실제로 터졌다).
+                return list(csv.DictReader(io.StringIO(t, newline="")))
         except Exception:                            # noqa: BLE001
             pass
-    return list(csv.DictReader(io.StringIO(raw.decode("cp949", "replace"))))
+    return list(csv.DictReader(io.StringIO(raw.decode("cp949", "replace"), newline="")))
 
 
 g = lambda r, k: (r.get(k) or "").strip()
