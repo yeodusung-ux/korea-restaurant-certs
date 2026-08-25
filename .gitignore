@@ -1,3 +1,8 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# 지오코딩
+build/kakao_key.txt
+build/*.part
+build/_geo_selftest.csv

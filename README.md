@@ -28,6 +28,10 @@
 - 지역 **시도 → 시·군 → 구** 3단계, 음식 대분류 **다중 선택**, 원본 분류,
   통합검색(업소명·주소·메뉴 + **내 목록에 적어 둔 메모**)
 - **마지막 조회조건을 기억한다** — 다음에 열면 그대로 시작한다(`초기화`로 되돌린다)
+- **📍 내 주변** — 기기 위치에서 **반경 500m ~ 20km** 안의 업소만 남기고 가까운 순으로 정렬한다.
+  거리는 각 줄의 지역 칸 앞에 붙는다. 위치는 **페이지 안에서만 쓰고 저장하지도 전송하지도 않는다**
+  (새로 열면 다시 눌러야 한다). 반경을 켜면 지역 필터는 자동으로 풀린다 —
+  둘이 함께 걸리면 "내 주변인데 왜 안 나오지"가 되기 때문이다
 - 주소 클릭 시 지도 검색 · 폰 대응(카드 레이아웃)
 - ★ 표시 클릭으로 **내 목록**에 담고 메모를 단다(이 브라우저에만 저장)
 
@@ -68,7 +72,7 @@ python build/make_guide_csv.py 빨간.json build/guide_red.csv
 데이터가 그대로면 커밋하지 않습니다. Actions 탭에서 수동 실행(`Run workflow`)도 됩니다.
 직접 선별 2종은 네트워크를 타지 않고 위의 시드 CSV 를 읽습니다.
 
-### 필요한 시크릿 2개
+### 필요한 시크릿 4개
 
 리포 **Settings → Secrets and variables → Actions → New repository secret**
 
@@ -77,8 +81,38 @@ python build/make_guide_csv.py 빨간.json build/guide_red.csv
 | `ODCLOUD_KEY` | [공공데이터포털](https://www.data.go.kr) 일반 인증키(Decoding) | 백년가게 · **관광공사**(같은 키, 활용신청만 별도) |
 | `MAFRA_KEY` | [농림축산식품 공공데이터 포털](https://data.mafra.go.kr) — 가입 시 자동 발급 | 안심식당 |
 | `MFDS_KEY` | [식품안전나라](https://www.foodsafetykorea.go.kr/api/) — 가입 시 자동 발급 | 식품안심업소 |
+| `KAKAO_KEY` | [카카오 개발자](https://developers.kakao.com) — 앱 추가 후 **REST API 키** | 주소 → 좌표(내 주변 반경) |
 
 > ⚠️ data.go.kr 개발계정 키는 **1년 만료**입니다. 만료되면 워크플로가 실패하며 메일로 알려줍니다.
+
+### 주소 → 좌표 (내 주변 반경)
+
+**원본 6종에는 위경도가 없다.** 모범음식점·착한가격업소 CSV 헤더까지 확인했지만 좌표 열 자체가
+없다(2026-08-25). 그래서 반경 검색용 좌표는 **주소를 지오코딩해서 직접 만든다.**
+
+```
+build/geocode.py      주소 → 좌표, 결과를 build/geo_cache.csv 에 쌓는다(카카오 로컬 API)
+build/geo_cache.csv   주소순으로 정렬된 캐시. 이게 좌표의 정본이다
+build/addr.py         '어떤 문자열을 지오코더에 보낼지' 규칙 — 빌드·지오코더가 함께 쓴다
+.github/workflows/geocode.yml   수동 실행 + 매주 월요일 05:00(KST) 새 주소 줍기
+```
+
+- 고유 주소 **약 8.5만 개**, 카카오 무료 쿼터는 **일 10만 건** → 첫 회도 하루면 완주한다.
+  그 뒤로는 주간 갱신에서 새로 생긴 주소(보통 수백 건)만 받는다.
+- 캐시를 CSV 로 두는 이유는 git 델타다. JSON 이면 한 건만 늘어도 7MB 를 통째로 새로 저장한다.
+- **실패한 주소도 빈 좌표로 기록한다** — 안 그러면 돌릴 때마다 같은 주소를 또 물어보며 쿼터만 태운다.
+  다시 시도하려면 `--retry-fail`.
+- 좌표를 못 구한 곳은 **반경 검색에서 빠진다.** 시군구 중심 같은 근사값으로 때우지 않는다 —
+  '반경 1km' 라고 해 놓고 몇 km 틀린 좌표를 섞으면 기능 자체가 거짓말이 된다.
+- 캐시만 채운 뒤 `python build/rebuild_template.py` 하면 **전체 수집 없이** 좌표가 사이트에 심긴다.
+
+```bash
+export KAKAO_KEY=...                  # 또는 build/kakao_key.txt (gitignore 됨)
+python build/geocode.py               # 아직 좌표 없는 주소를 전부
+python build/geocode.py --limit 20000 # 쿼터를 나눠 쓰고 싶을 때
+python build/geocode.py --self-test   # 키 없이 규칙만 점검
+python build/rebuild_template.py      # 캐시 → index.html 반영
+```
 
 ### 실패하면 사이트는 어떻게 되나
 
@@ -121,7 +155,11 @@ build/guide_blue.csv           파란인증 시드(수동 관리)
 build/guide_red.csv            빨간인증 시드(수동 관리)
 build/make_guide_csv.py        네이버 지도 즐겨찾기 JSON → 위 시드 CSV 변환기
 build/rebuild_template.py      ★UI 만 고쳤을 때 쓰는 빠른 재렌더(키·네트워크 불필요, 1초 미만)
+build/addr.py                  주소 → 지오코딩 질의문 규칙(빌드·지오코더 공용)
+build/geocode.py               주소 → 좌표 캐시 채우기(카카오 로컬 API)
+build/geo_cache.csv            주소별 좌표 캐시(주소순 정렬 — git 델타를 위해 CSV)
 .github/workflows/update.yml   주간 갱신
+.github/workflows/geocode.yml  주소 → 좌표 캐시 채우기
 ```
 
 ## 데이터를 다루며 알게 된 것

@@ -797,6 +797,18 @@ data = {"sido": sidos, "sgg": sggs, "ds": dss, "cat": cats, "src": srcs, "gu": g
         "cats": CAT_ORDER, "meta": DS_META, "total": len(out), "gmask": gmask,
         "built": today}
 
+# ── 좌표 심기 ─────────────────────────────────────────────────────────
+# 원본 6종 어디에도 위경도가 없다(2026-08-25 확인 — 모범음식점·착한가격업소 CSV 헤더에도 없음).
+# '내 주변 반경' 검색용 좌표는 build/geo_cache.csv 에서 온다(카카오 로컬 API, geocode.py 가 채운다).
+# ★캐시가 비어 있어도 빌드는 그대로 진다 — 사이트는 반경 버튼만 잠긴 채 평소처럼 동작한다.
+sys.path.insert(0, HERE)
+import geocode as _geo                                              # noqa: E402
+
+_hit = _geo.attach(data)
+print("좌표 %s/%s행 (%.1f%%)%s"
+      % (format(_hit, ","), format(len(out), ","), 100.0 * _hit / max(len(out), 1),
+         " — 캐시가 비었다: 반경검색은 잠긴 채로 나간다" if not _hit else ""))
+
 html = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
 html = html.replace("/*__DATA__*/", json.dumps(data, ensure_ascii=False, separators=(",", ":")))
 dst = os.path.join(ROOT, "index.html")

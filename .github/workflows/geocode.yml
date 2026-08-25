@@ -1,0 +1,97 @@
+name: 주소 → 좌표 채우기
+
+# 왜 필요한가
+#   원본 6종 어디에도 위경도가 없다(2026-08-25 확인 — 모범음식점·착한가격업소 CSV 헤더에도
+#   좌표 열이 아예 없다). '내 주변 반경' 검색을 하려면 주소를 좌표로 바꿔 두는 수밖에 없다.
+#   그 결과가 build/geo_cache.csv 이고, 사이트 빌드는 그 캐시를 읽어 좌표를 심는다.
+#
+# 쿼터
+#   카카오 로컬 API 무료 한도는 일 10만 건. 고유 주소가 8.5만 개라 첫 회는 하루면 완주한다.
+#   그 뒤로는 주간 갱신에서 새로 생긴 주소(보통 수백 건)만 받으므로 사실상 공짜다.
+#
+# 시크릿
+#   KAKAO_KEY — 카카오 개발자 > 내 애플리케이션 > 앱 키 > **REST API 키**
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "이번에 받을 최대 주소 수(0=제한 없음)"
+        default: "0"
+      retry_fail:
+        description: "지난번 실패한 주소도 다시 시도"
+        type: boolean
+        default: false
+      publish:
+        description: "끝나고 index.html 까지 다시 만들어 커밋(반경 검색 즉시 반영)"
+        type: boolean
+        default: true
+  schedule:
+    # 일 20:00 UTC = 월요일 05:00 KST — 주간 갱신(일 04:00 KST)에서 새로 생긴 주소를 줍는다.
+    - cron: "0 20 * * 0"
+
+concurrency:
+  group: geocode
+  cancel-in-progress: false
+
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330          # 첫 회 8.5만 건 기준 여유(실측 6스레드 ≈ 25~60분)
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 좌표 캐시 채우기
+        env:
+          KAKAO_KEY: ${{ secrets.KAKAO_KEY }}
+          GEO_LIMIT: ${{ github.event.inputs.limit || '0' }}
+        run: |
+          python build/geocode.py ${{ github.event.inputs.retry_fail == 'true' && '--retry-fail' || '' }}
+
+      - name: 사이트에 좌표 심기
+        # ★전체 수집(build_site.py)을 다시 돌리지 않는다 — 공공 API 6종을 또 부를 이유가
+        #   없고, 지금 필요한 건 좌표뿐이다. rebuild_template.py 가 캐시만 다시 심는다.
+        # 예약 실행(inputs 없음)도 심는다 — 주 1회라 index.html 커밋이 늘어나 봐야 주 1개다.
+        if: github.event.inputs.publish != 'false'
+        run: python build/rebuild_template.py
+
+      - name: 커밋
+        run: |
+          if git diff --quiet -- build/geo_cache.csv index.html; then
+            echo "바뀐 게 없음 — 커밋 생략"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build/geo_cache.csv
+          git add index.html || true
+          git commit -m "chore: 주소 좌표 캐시 $(TZ=Asia/Seoul date +%Y-%m-%d)"
+          git push
+
+      - name: 진척도
+        if: always()
+        run: |
+          echo "### 좌표 캐시" >> $GITHUB_STEP_SUMMARY
+          python - <<'EOF' >> $GITHUB_STEP_SUMMARY
+          import csv, io, os
+          p = "build/geo_cache.csv"
+          if not os.path.exists(p):
+              print("- 캐시 없음")
+          else:
+              n = ok = 0
+              with io.open(p, encoding="utf-8", newline="") as f:
+                  for r in csv.reader(f):
+                      if not r or r[0] == "addr":
+                          continue
+                      n += 1
+                      ok += bool(len(r) >= 3 and r[1])
+              print("- 주소 %s개 · 좌표 확보 %s (%.1f%%)" % (format(n, ","), format(ok, ","),
+                                                         100.0 * ok / max(n, 1)))
+          EOF

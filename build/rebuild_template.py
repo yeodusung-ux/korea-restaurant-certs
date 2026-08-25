@@ -7,6 +7,10 @@ index.html 에 박힌 데이터(const D = {...})를 그대로 꺼내 새 templat
     build_site.py    수집 → 정규화 → 매칭 → 렌더   (전체, 키 필요, 실측 3~18분)
     rebuild_template.py                    렌더    (템플릿만, 키 불필요, 1초 미만)
 
+★좌표(geo_cache.csv)만은 예외로 매번 다시 심는다 — geocode.py 로 캐시를 채운 뒤
+  전체 수집을 다시 돌리지 않고 이 한 줄로 '내 주변 반경'을 켤 수 있게 하려는 것이다.
+  캐시가 없으면 index.html 에 이미 있던 좌표를 그대로 둔다(--no-geo 로 아예 끌 수 있다).
+
 ★언제 쓰면 안 되나 — 데이터가 바뀌는 변경에는 쓸 수 없다. 아래는 build_site.py 를 돌려야 한다.
     · guide_blue.csv / guide_red.csv 를 고쳤을 때
     · 소스 추가·삭제, 분류 규칙(classify)·주소 정규화·동일가게 매칭 로직을 고쳤을 때
@@ -14,6 +18,7 @@ index.html 에 박힌 데이터(const D = {...})를 그대로 꺼내 새 templat
 
 사용법:
     python build/rebuild_template.py
+    python build/rebuild_template.py --no-geo    # 좌표는 손대지 않고 템플릿만
 """
 import io
 import json
@@ -29,6 +34,7 @@ TPL = os.path.join(HERE, "template.html")
 
 
 def main():
+    no_geo = "--no-geo" in sys.argv
     if not os.path.exists(IDX):
         print("index.html 이 없다. 처음이라면 build_site.py 를 먼저 돌려야 한다.")
         return 1
@@ -45,6 +51,25 @@ def main():
     if len(rows) < 1000 or not data.get("ds"):
         print("데이터가 온전치 않다(rows=%d) → 중단" % len(rows))
         return 1
+
+    # ── 좌표 다시 심기 ───────────────────────────────────────────────
+    # geo_cache.csv 는 로컬 파일이라 네트워크도 키도 필요 없다. 캐시가 자란 만큼
+    # 반경 검색 적중률이 올라간다(캐시가 아예 없으면 있던 좌표를 그대로 둔다).
+    if not no_geo:
+        sys.path.insert(0, HERE)
+        import geocode as _geo
+        cache = _geo.load_cache()
+        if cache:
+            before = (data.get("geo") or {}).get("n", 0)
+            hit = _geo.attach(data, cache)
+            print("좌표 %s/%s행 (%.1f%%)%s"
+                  % (format(hit, ","), format(len(rows), ","),
+                     100.0 * hit / max(len(rows), 1),
+                     "" if hit == before else "  ← 지난번 %s행" % format(before, ",")))
+        elif "xy" in data:
+            print("좌표 캐시가 없다 — index.html 에 있던 좌표를 그대로 둔다")
+        else:
+            print("좌표 캐시가 없다 — 반경 검색은 잠긴 채로 나간다(geocode.py 로 채워라)")
 
     tpl = io.open(TPL, encoding="utf-8").read()
     if "/*__DATA__*/" not in tpl:

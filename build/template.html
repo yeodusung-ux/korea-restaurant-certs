@@ -118,6 +118,10 @@ td.cert{min-width:244px}   /* 8종이 되며 배지가 6개까지 나온다 — 
 .thumb{width:42px;height:42px;object-fit:cover;border-radius:7px;border:1px solid var(--line);
        float:left;margin:1px 9px 2px 0;background:var(--chip)}
 button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button.act:disabled{opacity:.45;cursor:default}
+/* 거리 배지 — '지역' 칸 맨 앞에 붙는다(열을 새로 만들면 폰 카드 레이아웃이 한 줄 더 길어진다) */
+.pill.dist{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+#nearInfo{font-size:11px;color:var(--muted)}
 .pager{display:flex;gap:5px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
 .pager button{min-width:28px;height:var(--ctl);padding:0 8px;border:1px solid var(--line);
       background:var(--panel);color:var(--muted);border-radius:5px;cursor:pointer;
@@ -226,6 +230,19 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <label class="chk"><input type="checkbox" id="fFood" checked> 요식업만</label>
       <label class="chk" title="켜 둔 인증을 모두 받은 가게만 봅니다(한 가게 한 줄)"><input type="checkbox" id="fAnd"> 인증 모두 충족</label>
       <span id="andHint" style="font-size:11px;color:var(--muted)"></span>
+      <button class="act" id="bNear" title="지금 있는 자리에서 가까운 곳만 봅니다">📍 내 주변</button>
+      <div class="f" style="min-width:92px">
+        <select id="fRad" disabled title="반경">
+          <option value="0.5">반경 500m</option>
+          <option value="1">반경 1km</option>
+          <option value="2">반경 2km</option>
+          <option value="3">반경 3km</option>
+          <option value="5">반경 5km</option>
+          <option value="10">반경 10km</option>
+          <option value="20">반경 20km</option>
+        </select>
+      </div>
+      <span id="nearInfo"></span>
       <button class="act" id="bFav">☆ 내 목록 <span id="favN">0</span></button>
       <button class="act" id="bReset">↺ 초기화</button>
       <div class="brk"></div><!-- 폰에서만 줄을 끊어 지도·정렬을 한 줄에 나란히 둔다 -->
@@ -238,6 +255,7 @@ button.act.on{background:var(--accent);border-color:var(--accent);color:#fff}
       <div class="f" style="min-width:136px">
         <select id="fSort">
           <option value="certs">정렬: ★ 인증 많은순</option>
+          <option value="near">정렬: 가까운 순</option>
           <option value="name">정렬: 업소명순</option>
           <option value="region">정렬: 지역순</option>
           <option value="ds">정렬: 출처순</option>
@@ -315,6 +333,24 @@ const N_NAME=0,N_SIDO=1,N_SGG=2,N_DS=3,N_CAT=4,N_SRC=5,N_DET=6,N_ADDR=7,N_TEL=8,
 const PER=100, DCOL=['var(--d1)','var(--d2)','var(--d3)','var(--d4)','var(--d5)','var(--d6)',
                      'var(--d7)','var(--d8)'];
 const GMASK=D.gmask;
+
+/* ── 내 주변(반경) ──────────────────────────────────────────────────
+   ★원본 6종에는 좌표가 없다. 빌드가 주소를 지오코딩해 만든 값이 D.xy 로 들어온다.
+     xy[2i], xy[2i+1] = 행 i 의 (위도, 경도) — 기준점을 빼고 10만 배 한 정수, 없으면 -1.
+   ★내 위치는 어디에도 저장하지 않는다(localStorage 에도, 조회조건에도).
+     페이지를 새로 열면 다시 눌러야 한다 — 위치를 남기지 않으려고 일부러 이렇게 뒀다. */
+const XY=D.xy||null, GEO=D.geo||null;
+const GEO_OK=!!(XY&&GEO&&GEO.n);
+const GEO_MISS=GEO?GEO.of-GEO.n:0;                 // 좌표를 못 구한 행 수(반경 검색에서 빠진다)
+const N_IX=13, N_DIST=14;                          // ★rows 뒤에 붙이는 자리(원본 열은 0~12)
+for(let i=0;i<R.length;i++){ R[i][N_IX]=i; R[i][N_DIST]=-1; }
+const D2R=Math.PI/180, KM_LAT=111.19;
+let myPos=null, kx=88.9;                           // kx=내 위도에서 경도 1도의 km
+const nearOn=()=>!!(myPos&&GEO_OK);
+const fmtKm=d=> d<1 ? Math.round(d*1000)+'m' : (d<10?d.toFixed(1):Math.round(d))+'km';
+const RAD_LS='restcert.radius';
+let radKm=(()=>{ let v=3; try{ v=+(localStorage.getItem(RAD_LS)||3); }catch(e){}
+                 return [0.5,1,2,3,5,10,20].includes(v)?v:3; })();
 let cur=[], page=1, sortKey='certs', sortDir=1, dsOn=new Set(DS);
 let catSel = new Set();                 // 대분류 다중선택(비어 있으면 전체)
 const GU = D.gu || [''];
@@ -448,6 +484,10 @@ $('#footNote').innerHTML = `
  <b>★ 별점은 그렇게 겹친 인증 수</b>이며, 별점순으로 볼 때만 한 줄로 접습니다.<br>
  ⚠️ <b>파란인증·빨간인증은 공공데이터가 아닌 개인 선별 목록</b>입니다. 공식 제도가 아니며
  나머지 여섯과 달리 자동 갱신되지 않고, 전화번호·지정일이 없습니다.<br>
+ 📍 <b>내 주변</b>은 기기 위치를 받아 반경 안의 업소만 남깁니다 —
+ <b>위치는 이 페이지 안에서만 쓰고 저장하지도, 어디로 보내지도 않습니다</b>(새로 열면 다시 눌러야 합니다).
+ 업소 좌표는 <b>주소를 지오코딩해 만든 값</b>이라 건물 단위로 몇 십 m 차이가 날 수 있고,
+ <b>주소로 좌표를 못 찾은 곳은 반경 검색에서 빠집니다</b>.<br>
  ℹ️ <b>검색은 내 목록에 적어 둔 메모까지 훑습니다</b> — 메모에 <code>재방문</code> 처럼 적어 두면 그 말로 다시 찾을 수 있습니다.<br>
  ⚠️ 각 출처는 <b>지정 취소·폐업분을 걸러낸 유효분만</b> 담았습니다 —
  모범음식점 65,426→11,455 · 안심식당 67,740→42,630.<br>
@@ -537,8 +577,26 @@ function apply(reset){
   const sd=$('#fSido').value, sg=$('#fSgg').value, gu=$('#fGu').value,
         sc=$('#fSrc').value, q=$('#fQ').value.trim().toLowerCase();
   const nCat=catSel.size;
+  // ★위치를 못 얻었는데 '가까운 순'이 남아 있으면 거리 없는 정렬이 된다 → 되돌린다
+  const near=nearOn();
+  if(sortKey==='near' && !near){ sortKey='certs'; $('#fSort').value='certs'; }
+  /* 반경은 맨 먼저 거른다 — 가장 세게 줄어드는 조건이라 뒤 조건을 볼 일이 크게 준다.
+     사각형(위경도 차)으로 먼저 쳐내고 살아남은 것만 실제 거리를 잰다.
+     수십 km 범위에서는 평면 근사로 충분하다(하버사인 대비 오차 ~0.1%). */
+  const my=myPos, rad=radKm,
+        dLat = near ? rad/KM_LAT : 0,
+        dLng = near ? rad/Math.max(kx,1) : 0;
   cur=[];
   for(const i of POOL){ const r=R[i];
+    if(near){
+      const a=XY[2*i];
+      if(a<0) continue;                       // 좌표 미확보 행은 반경 검색에 못 들어온다
+      const dy=(GEO.lat0+a/GEO.scale)-my.lat, dx=(GEO.lng0+XY[2*i+1]/GEO.scale)-my.lng;
+      if(dy>dLat||dy<-dLat||dx>dLng||dx<-dLng) continue;
+      const ky=dy*KM_LAT, kxx=dx*kx, d=Math.sqrt(ky*ky+kxx*kxx);
+      if(d>rad) continue;
+      r[N_DIST]=d;
+    }
     // favOnly 가 꺼져 있으면 단락 평가로 favKey 계산 자체를 건너뛴다(6.8만 행 정규식 비용)
     if((!favOnly || favs[favKey(r)]) &&
        (!sd||SIDO[r[N_SIDO]]===sd) && (!sg||SGG[r[N_SGG]]===sg) &&
@@ -554,7 +612,7 @@ function apply(reset){
   // ★정렬 키를 행마다 한 번만 만든다.
   //   비교 함수 안에서 K() 를 부르면 5만 행 정렬에 문자열 조립이 150만 번 일어난다.
   //   인덱스만 정렬한 뒤 되짚으면 K() 호출이 행 수만큼으로 줄어든다.
-  if(sortKey==='certs' && !andMode){
+  if((sortKey==='certs'||sortKey==='near') && !andMode){
     // ★별점순은 '좋은 집 순으로 보기'다. 같은 가게가 인증 수만큼 연달아 나오면 목록이 망가진다.
     //   교집합 모드는 refreshPool 에서 이미 접혀 있으므로 합집합일 때만 접는다.
     const best=new Map();
@@ -565,7 +623,11 @@ function apply(reset){
     cur=[...best.values()];
   }
   const keys=new Array(cur.length), ord=new Array(cur.length);
-  if(sortKey==='certs'){
+  if(sortKey==='near'){
+    // 거리는 숫자다 — 문자열 비교를 태우지 않는다. 같은 거리면 업소명순.
+    for(let i=0;i<cur.length;i++) ord[i]=i;
+    ord.sort((x,y)=> (cur[x][N_DIST]-cur[y][N_DIST]) || COLL.compare(cur[x][N_NAME],cur[y][N_NAME]));
+  } else if(sortKey==='certs'){
     // 별점은 숫자라 문자열 비교를 쓰지 않는다. 같은 별점이면 업소명순.
     const cn=new Array(cur.length);
     for(let i=0;i<cur.length;i++){ cn[i]=certN(cur[i]); keys[i]=cur[i][N_NAME]; ord[i]=i; }
@@ -612,6 +674,7 @@ function restoreState(){          // 되살렸으면 true — 호출부가 reflo
   }
   if(s.food===false) $('#fFood').checked=false;
   if(s.and){ andMode=true; $('#fAnd').checked=true; }
+  // ★'가까운 순'은 되살리지 않는다 — 위치를 저장하지 않으므로 거리 없는 정렬이 된다
   if(['certs','name','region','ds','new'].includes(s.sort)){ sortKey=s.sort; $('#fSort').value=s.sort; }
   if(s.dir===-1) sortDir=-1;
   (s.cat||[]).filter(c=>CAT.includes(c)).forEach(c=>catSel.add(c));
@@ -633,12 +696,14 @@ function restoreState(){          // 되살렸으면 true — 호출부가 reflo
 
 function render(){
   $('#cNum').textContent=nf(cur.length);
-  const unit = (andMode || sortKey==='certs') ? '곳' : '건';
+  const folded = andMode || sortKey==='certs' || sortKey==='near';
+  const unit = folded ? '곳' : '건';
   $('#cUnit').textContent = unit;
-  const total = (andMode||sortKey==='certs') ? POOL_STORES : POOL.length;   // 단위를 맞춰서 비교한다
+  const total = folded ? POOL_STORES : POOL.length;   // 단위를 맞춰서 비교한다
   $('#cOf').textContent = cur.length===total ? '' : ' / '+nf(total)+unit;
   const maxP=Math.max(1,Math.ceil(cur.length/PER)); if(page>maxP) page=maxP;
   const sl=cur.slice((page-1)*PER,page*PER);
+  const near=nearOn();
   $('#noRes').classList.toggle('hide',cur.length>0);
   $('#tb').innerHTML=sl.map(r=>{
     const m=rowMask(r), cn=certN(r);
@@ -655,7 +720,7 @@ function render(){
         fv ? `<button class="memo-edit" data-k="${esc(fk)}">${fv.m?'✎ 메모':'✎ 메모 달기'}</button>` : ''}${
         fv && fv.m ? `<div class="memo">${esc(fv.m)}</div>` : ''}</td>
       <td class="cert" data-label="인증">${badges}</td>
-      <td class="c-region" data-label="지역"><span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}${r[N_GU]?' '+esc(GU[r[N_GU]]):''}</td>
+      <td class="c-region" data-label="지역">${near&&r[N_DIST]>=0?`<span class="pill dist">${fmtKm(r[N_DIST])}</span> `:''}<span class="pill">${esc(SIDO[r[N_SIDO]])}</span> ${esc(SGG[r[N_SGG]])}${r[N_GU]?' '+esc(GU[r[N_GU]]):''}</td>
       <td class="c-cat" data-label="대분류"><span class="pill">${esc(CAT[r[N_CAT]])}</span></td>
       <td class="c-src" data-label="분류">${esc(SRC[r[N_SRC]])||'-'}</td>
       <td class="detail" data-label="메뉴">${r[N_DET]?`<span class="clip" title="${esc(r[N_DET])}">${esc(r[N_DET])}</span>`:'<span style="color:var(--muted)">-</span>'}</td>
@@ -699,7 +764,68 @@ $('#fFood').addEventListener('change',()=>{ reflow(); });
 // 교집합 전환은 풀 자체가 바뀐다 — 필터 옵션의 건수도 다시 세야 하므로 reflow
 $('#fAnd').addEventListener('change',e=>{ andMode=e.target.checked; page=1; reflow(); });
 let t; $('#fQ').addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>apply(),180);});
-$('#fSort').addEventListener('change',e=>{sortKey=e.target.value;sortDir=1;apply();});
+$('#fSort').addEventListener('change',e=>{
+  if(e.target.value==='near' && !nearOn()){        // 위치부터 받아야 정렬이 성립한다
+    e.target.value=sortKey;
+    $('#bNear').click();
+    return;
+  }
+  sortKey=e.target.value;sortDir=1;apply();
+});
+
+/* ── 내 주변 ────────────────────────────────────────────────────────
+   ★https 에서만 동작한다(브라우저 규칙). GitHub Pages 도, 앱의 asset loader 도 https 다.
+   ★안드로이드 앱은 WebView 라 브라우저 권한 외에 앱 권한이 하나 더 필요하다 —
+     MainActivity 의 onGeolocationPermissionsShowPrompt 가 그 다리다. */
+function nearBtn(){ return $('#bNear'); }
+function nearOff(quiet){
+  myPos=null;
+  nearBtn().classList.remove('on');
+  nearBtn().textContent='📍 내 주변';
+  $('#fRad').disabled=true;
+  $('#nearInfo').textContent='';
+  if(sortKey==='near'){ sortKey='certs'; $('#fSort').value='certs'; }
+  if(!quiet) apply();
+}
+function nearInfo(){
+  $('#nearInfo').textContent = nearOn()
+    ? `내 위치 ${fmtKm(radKm)} 이내` + (GEO_MISS?` · 좌표 없는 ${nf(GEO_MISS)}건 제외`:'')
+    : '';
+}
+nearBtn().addEventListener('click',()=>{
+  if(nearOn()){ nearOff(); return; }
+  if(!GEO_OK){
+    alert('이 데이터에는 아직 좌표가 없어 반경 검색을 쓸 수 없습니다.\n(빌드에서 주소→좌표 변환이 채워지면 켜집니다)');
+    return;
+  }
+  if(!navigator.geolocation || window.isSecureContext===false){
+    alert('이 브라우저에서는 위치를 쓸 수 없습니다. https 로 열어야 합니다.');
+    return;
+  }
+  const b=nearBtn();
+  b.disabled=true; b.textContent='📍 위치 확인 중…';
+  navigator.geolocation.getCurrentPosition(pos=>{
+    b.disabled=false; b.textContent='📍 내 주변'; b.classList.add('on');
+    myPos={lat:pos.coords.latitude, lng:pos.coords.longitude};
+    kx=111.320*Math.cos(myPos.lat*D2R);
+    $('#fRad').disabled=false; $('#fRad').value=String(radKm);
+    // 반경과 지역 필터가 함께 걸리면 '내 주변인데 왜 안 나오지'가 된다 → 지역은 비운다
+    $('#fSido').value=''; $('#fSgg').value=''; $('#fGu').value=''; refreshSgg();
+    sortKey='near'; $('#fSort').value='near'; sortDir=1;
+    nearInfo();
+    apply();
+  }, err=>{
+    b.disabled=false; b.textContent='📍 내 주변';
+    alert(err.code===1 ? '위치 권한이 거부돼 있습니다. 브라우저(또는 앱) 설정에서 위치를 허용해 주세요.'
+        : err.code===3 ? '위치를 얻는 데 시간이 너무 걸립니다. 실외에서 다시 시도해 보세요.'
+        : '지금은 위치를 확인할 수 없습니다.');
+  }, {enableHighAccuracy:true, timeout:12000, maximumAge:120000});
+});
+$('#fRad').addEventListener('change',e=>{
+  radKm=+e.target.value;
+  try{ localStorage.setItem(RAD_LS,String(radKm)); }catch(err){}
+  nearInfo(); apply();
+});
 $('#fMap').addEventListener('change',e=>{
   mapSvc=e.target.value;
   try{ localStorage.setItem(MAP_LS,mapSvc); }catch(err){}
@@ -790,6 +916,7 @@ $('#bReset').addEventListener('click',()=>{
   dsOn=new Set(DS);
   document.querySelectorAll('.ds').forEach(c=>c.classList.add('on'));
   favOnly=false; syncFavUi();          // ★내 목록 '내용'은 지우지 않는다(사용자 데이터)
+  nearOff(true);                       // 반경도 푼다(위치는 애초에 저장하지 않는다)
   reflow();
 });
 document.querySelectorAll('th[data-s]').forEach(th=>th.addEventListener('click',()=>{
@@ -808,7 +935,7 @@ $('#pg').addEventListener('click',e=>{const b=e.target.closest('button');
      value 는 건드리지 않으므로 저장된 조회조건·지도 설정에 영향이 없다. */
 const SHORT_OPT = {
   fMap:  {naver:'네이버지도', kakao:'카카오맵'},
-  fSort: {certs:'★ 인증순', name:'업소명순', region:'지역순', ds:'출처순', new:'최신순'}
+  fSort: {certs:'★ 인증순', near:'가까운순', name:'업소명순', region:'지역순', ds:'출처순', new:'최신순'}
 };
 const LONG_OPT = {};
 for (const id in SHORT_OPT){
@@ -827,6 +954,13 @@ addEventListener('resize', syncOptLabels);
 syncOptLabels();
 
 $('#fMap').value=mapSvc;
+$('#fRad').value=String(radKm);
+if(!GEO_OK){
+  nearBtn().disabled=true;
+  nearBtn().title='이 빌드에는 좌표 데이터가 없습니다';
+  const nearOpt=$('#fSort').querySelector('option[value="near"]');
+  if(nearOpt) nearOpt.disabled=true;   // 못 쓰는 정렬을 고르게 두면 아무 반응 없는 칸이 된다
+}
 rebuildMemo();
 if(!restoreState()) reflow();   // 저장된 조건이 있으면 그걸로 시작한다
 syncFavUi(); $('#fQ').focus();
