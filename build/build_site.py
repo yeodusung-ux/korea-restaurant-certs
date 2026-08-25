@@ -501,9 +501,29 @@ hg = [r for r in hg_live if _base(g(r, "BSSH_NM")) not in _chain]
 print("   전체 %s → 일반음식점·유효 %s → 프랜차이즈 제외 %s"
       % (format(len(hg_rows), ","), format(len(hg_live), ","), format(len(hg), ",")))
 
+# ── ★식약처 주소 절단 보정 (2026-08-25 발견) ─────────────────────────
+# 2026-08-16 빌드부터 C004 의 ADDR 이 '강원특별자치도 강릉시' 처럼 **시군구까지만** 온다
+# (8/9 빌드까지는 도로명·번지가 온전했다. 실측: 8/9 index.html 은 토큰 4~15개,
+#  8/16·8/23 은 1~3개 · 13,020행). 원인이 무엇이든 이 상태로는 주소칸도 지도 링크도
+# 반경 검색도 다 못 쓴다 → 8/9 응답을 얼려 둔 시드에서 **더 자세한 주소만** 되살린다.
+# ★시드는 다시 갱신되지 않는다(백년가게 2022 파일본 이식과 같은 성격). 라이선스 인허가번호
+#   (LCNS_NO)로 맞추므로 상호가 바뀌어도 붙고, 시드에 없으면 그냥 원본을 쓴다.
+MFDS_ADDR_SEED = os.path.join(HERE, "mfds_addr_seed.csv")
+_addr_seed = {}
+if os.path.exists(MFDS_ADDR_SEED):
+    for _row in csv.reader(io.open(MFDS_ADDR_SEED, encoding="utf-8", newline="")):
+        if _row and _row[0] != "lcns_no":
+            _addr_seed[_row[0]] = _row[1]
+_addr_fixed = 0
+
 for r in hg:
     # ★PRSDNT_NM(대표자 실명)은 개인정보라 읽지 않는다
     addr = g(r, "ADDR")
+    if len(addr.split()) < 4:
+        _s = _addr_seed.get(g(r, "LCNS_NO"), "")
+        if len(_s.split()) > len(addr.split()):
+            addr = _s
+            _addr_fixed += 1
     t = addr.split()
     sgg = t[1] if len(t) >= 2 else "(미상)"
     ymd = g(r, "HG_ASGN_YMD")
@@ -512,6 +532,9 @@ for r in hg:
                      cat=classify(g(r, "BSSH_NM")), src="일반음식점", detail="",
                      addr=addr, tel=g(r, "TELNO"),
                      date=("%s-%s-%s" % (ymd[:4], ymd[4:6], ymd[6:])) if len(ymd) == 8 else ""))
+
+print("   주소 절단 보정 %s건 (시드 %s건)"
+      % (format(_addr_fixed, ","), format(len(_addr_seed), ",")))
 
 # ── ⑦⑧ 파란인증 · 빨간인증 — 직접 선별한 목록(시드 CSV) ────────────────
 # 공공 API 가 아니다. 사람이 네이버 지도 즐겨찾기로 관리하고 make_guide_csv.py 로 굳힌 파일을 읽는다.

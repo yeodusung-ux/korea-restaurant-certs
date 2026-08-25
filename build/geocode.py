@@ -123,6 +123,21 @@ class Quota(Exception):
     pass
 
 
+# ★번지 없는 질의는 아예 보내지 않는다.
+#   카카오는 '서울특별시 강남구' 같은 질의에도 **구청 좌표**를 성공으로 돌려준다(address_type
+#   =REGION). 실측 2026-08-25: 주소칸이 비어 시도·시군구만 남은 행 1,000여 개가 강남구청·
+#   제주시청 한 점에 쌓였다(강남구 473행). 그런 좌표로 '반경 1km' 를 말하면 거짓말이 된다.
+#   → 번지가 없으면 실패로 두고 반경 검색에서 빼는 게 맞다.
+HAS_NO = re.compile(r"\d")
+# 지역·도로 대표점이 아니라 '진짜 주소'로 맞은 것만 받는다
+OK_TYPES = ("ROAD_ADDR", "REGION_ADDR")
+
+
+def has_number(q):
+    from addr import RD, JB
+    return bool(RD.search(q) or JB.search(q))
+
+
 def ask(q, k):
     """카카오 로컬 주소검색. 좌표 (lat, lng) 또는 None."""
     req = urllib.request.Request(API + urllib.parse.urlencode({"query": q, "size": 1}),
@@ -135,6 +150,9 @@ def ask(q, k):
             finally:
                 r.close()
             if not doc:
+                return None
+            # ★address_type 이 REGION(지역명)·ROAD(번호 없는 도로)면 대표점이다 — 버린다
+            if doc[0].get("address_type") not in OK_TYPES:
                 return None
             return (float(doc[0]["y"]), float(doc[0]["x"]))     # y=위도, x=경도
         except urllib.error.HTTPError as e:
@@ -154,6 +172,8 @@ def ask(q, k):
 
 def geocode_one(q, k):
     """헐거운 질의까지 차례로 시도한다. 어느 하나가 맞으면 그 좌표."""
+    if not has_number(q):
+        return None                    # 번지 없는 주소 — 쿼터도 안 쓴다
     for v in variants(q):
         xy = ask(v, k)
         if xy and 33.0 <= xy[0] <= 39.0 and 124.0 <= xy[1] <= 132.0:   # 남한 밖은 오매칭
